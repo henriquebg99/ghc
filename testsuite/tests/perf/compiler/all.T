@@ -554,6 +554,11 @@ test('T16875',  # Testing one hole-fit with a lot in scope for #16875
      collect_compiler_stats('bytes allocated', 2),
      compile, ['-fdefer-type-errors -fno-max-valid-hole-fits -package ghc'])
 
+test ('T20261',
+      [collect_compiler_stats('all')],
+      compile,
+      [''])
+
 test ('T15703',
       [ collect_compiler_stats('bytes allocated',2) ],
       multimod_compile,
@@ -564,7 +569,7 @@ test ('T8095',
       compile,
       ['-v0 -O'])
 
-test ('T20261',
-      [collect_compiler_stats('all')],
+test ('T13386',
+      [ collect_compiler_stats('bytes allocated',2) ],
       compile,
-      [''])
+      ['-v0 -O0'])
