@@ -1,4 +1,5 @@
 
+{-# LANGUAGE DataKinds #-}
 
 -- | Implements a selective lambda lifter, running late in the optimisation
 -- pipeline.
@@ -136,6 +137,7 @@ liftTopLvl this_mod (StgTopLifted bind) rest = do
   let is_rec = isRec $ fst $ decomposeStgBinding bind
   when is_rec startBindingGroup
   let bind_w_fvs = annBindingFreeVars this_mod bind
+  -- let bind_w_fvs = annBindingFreeVars (bind :: GenStgBinding 'Vanilla) :: GenStgBinding 'CodeGen
   withLiftedBind TopLevel (tagSkeletonTopBind bind_w_fvs) NilSk $ \mb_bind' -> do
     -- We signal lifting of a binding through returning Nothing.
     -- Should never happen for a top-level binding, though, since we are already

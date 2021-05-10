@@ -1,4 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
 
 {- |
 Non-global free variable analysis on STG terms. This pass annotates
@@ -47,6 +50,7 @@ module GHC.Stg.FVs (
 import GHC.Prelude hiding (mod)
 
 import GHC.Stg.Syntax
+import GHC.Stg.Utils
 import GHC.Types.Id
 import GHC.Types.Name (Name, nameIsLocalOrFrom)
 import GHC.Types.Tickish ( GenTickish(Breakpoint) )
@@ -144,6 +148,36 @@ data Env
     locals :: IdSet
   , mod    :: Module
   }
+
+-- {-
+--     Note [The FVPass Constraint]
+--     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+-- Currently the free variable pass is used in two places:
+-- * The late lambda lifting pass in order to estimate the size of closures
+-- * Before codegen to figure out the actual free variables.
+
+-- However we have a different parameterisation for each of these.
+-- In order to avoid code duplication I've added the `FVPass i o` constraint.
+
+-- The principle is simple: We don't modify the input except for replacing
+-- XRhsClosure extension points with DIdSet.
+
+-- FVPass encodes this fact in the form of a constraint. The alternative is to
+-- force the FV pass to have fixed input/output passes.
+-- -}
+
+-- type FVPass i o = (BinderP i ~ Id,
+--                    BinderP o ~ Id,
+
+--                    -- The RhsClosure extension will contain the free variables afterwards
+--                    XRhsClosure o ~ DIdSet,
+--                    XLet i ~ XLet o,
+--                    XLetNoEscape i ~ XLetNoEscape o
+--                   )
+
+-- emptyEnv :: Env
+-- emptyEnv = Env emptyVarSet
 
 addLocals :: [Id] -> Env -> Env
 addLocals bndrs env
