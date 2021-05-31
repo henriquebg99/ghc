@@ -16,6 +16,7 @@ import GHC.Driver.Env
 import GHC.Platform.Ways  ( hasWay, Way(WayProf) )
 
 import GHC.Core
+import GHC.Core.Coercion.Opt ( optCoercionProgram )
 import GHC.Core.Opt.CSE  ( cseProgram )
 import GHC.Core.Rules   ( mkRuleBase, unionRuleBase,
                           extendRuleBaseList, ruleCheckProgram, addRuleInfo,
@@ -149,6 +150,7 @@ getCoreToDo logger dflags
     eta_expand_on = gopt Opt_DoLambdaEtaExpansion         dflags
     pre_inline_on = gopt Opt_SimplPreInlining             dflags
     ww_on         = gopt Opt_WorkerWrapper                dflags
+    opt_coercion  = gopt Opt_OptCoercionFull              dflags
     static_ptrs   = xopt LangExt.StaticPointers           dflags
     profiling     = ways dflags `hasWay` WayProf
 
@@ -225,7 +227,9 @@ getCoreToDo logger dflags
         runWhen (profiling && not (null $ callerCcFilters dflags)) CoreAddCallerCcs
 
     core_todo =
-     [
+      [
+       runWhen opt_coercion CoreDoOptCoercion,
+
     -- We want to do the static argument transform before full laziness as it
     -- may expose extra opportunities to float things outwards. However, to fix
     -- up the output of the transformation we need at do at least one simplify
@@ -524,6 +528,9 @@ doCorePass pass guts = do
 
     CoreDoPrintCore           -> {-# SCC "PrintCore" #-}
                                  liftIO $ printCore logger (mg_binds guts) >> return guts
+
+    CoreDoOptCoercion         -> {-# SCC "OptCoercion" #-}
+                                 updateBinds optCoercionProgram
 
     CoreDoRuleCheck phase pat -> {-# SCC "RuleCheck" #-}
                                  ruleCheckPass phase pat guts
