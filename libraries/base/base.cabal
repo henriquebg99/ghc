@@ -204,6 +204,7 @@ Library
         GHC.Err
         GHC.Event.TimeOut
         GHC.Exception
+        GHC.Exception.Backtrace
         GHC.Exception.Type
         GHC.ExecutionStack
         GHC.ExecutionStack.Internal
@@ -266,6 +267,7 @@ Library
         GHC.RTS.Flags
         GHC.ST
         GHC.Stack.CloneStack
+        GHC.Stack.CloneStack.Types
         GHC.StaticPtr
         GHC.STRef
         GHC.Show
