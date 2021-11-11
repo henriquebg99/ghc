@@ -928,6 +928,10 @@ AC_PATH_PROG(GIT,git)
 dnl ** check for makeinfo
 AC_PATH_PROG(MAKEINFO,makeinfo)
 
+dnl ** check for cabal
+AC_PATH_PROG(CABAL,cabal)
+
+
 dnl ** check for Python for testsuite driver
 FIND_PYTHON
 
@@ -1400,6 +1404,7 @@ echo "\
    xelatex      : $XELATEX
    makeinfo     : $MAKEINFO
    git          : $GIT
+   cabal-install : $CABAL
 
    Using LLVM tools
       clang : $ClangCmd
