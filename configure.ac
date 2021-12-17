@@ -1331,6 +1331,7 @@ AC_CONFIG_FILES(
   utils/ghc-pkg/ghc-pkg.cabal
   utils/remote-iserv/remote-iserv.cabal
   utils/gen-dll/gen-dll.cabal
+  libraries/ghc-abihash/ghc-abihash.cabal
   libraries/ghc-boot/ghc-boot.cabal
   libraries/ghc-boot-th/ghc-boot-th.cabal
   libraries/ghci/ghci.cabal

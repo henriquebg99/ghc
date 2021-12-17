@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase #-}
 module Main where
 
 import Distribution.Simple
@@ -11,6 +12,7 @@ import Distribution.Simple.Program
 import System.IO
 import System.Directory
 import System.FilePath
+import System.Environment
 import Control.Monad
 import Data.Char
 import GHC.ResponseFile
@@ -19,9 +21,9 @@ main :: IO ()
 main = defaultMainWithHooks ghcHooks
   where
     ghcHooks = simpleUserHooks
-      { buildHook = \pd lbi uh bf -> do
+      { postConf = \args cfg pd lbi -> do
           ghcAutogen lbi
-          buildHook simpleUserHooks pd lbi uh bf
+          postConf simpleUserHooks args cfg pd lbi
       }
 
 ghcAutogen :: LocalBuildInfo -> IO ()
@@ -29,31 +31,42 @@ ghcAutogen lbi@LocalBuildInfo{..} = do
   -- Get compiler/ root directory from the cabal file
   let Just compilerRoot = takeDirectory <$> pkgDescrFile
 
-  -- Require the necessary programs
-  (gcc   ,withPrograms) <- requireProgram normal gccProgram withPrograms
-  (ghc   ,withPrograms) <- requireProgram normal ghcProgram withPrograms
-  (ghcPkg,withPrograms) <- requireProgram normal ghcPkgProgram withPrograms
+  let platformHostFile = "GHC/Platform/Host.hs"
+      platformHostPath = autogenPackageModulesDir lbi </> platformHostFile
+      ghcVersionFile = "GHC/Version.hs"
+      ghcVersionPath = autogenPackageModulesDir lbi </> ghcVersionFile
 
   -- Get compiler settings
-  settings <- read <$> getProgramOutput normal ghc ["--info"]
+  settings <- lookupEnv "HADRIAN_SETTINGS" >>= \case
+    Just settings -> pure $ Left $ read settings
+    Nothing -> do
+      (ghc,withPrograms) <- requireProgram normal ghcProgram withPrograms
+      Right . read <$> getProgramOutput normal ghc ["--info"]
 
   -- Write GHC.Platform.Host
-  let platformHostPath = autogenPackageModulesDir lbi </> "GHC/Platform/Host.hs"
   createDirectoryIfMissing True (takeDirectory platformHostPath)
   writeFile platformHostPath (generatePlatformHostHs settings)
 
   -- Write GHC.Version
-  let ghcVersionPath = autogenPackageModulesDir lbi </> "GHC/Version.hs"
   createDirectoryIfMissing True (takeDirectory ghcVersionPath)
   writeFile ghcVersionPath (generateVersionHs settings)
 
-generatePlatformHostHs :: [(String,String)] -> String
+-- | Takes either a list of hadrian generated settings, or a list of settings from ghc --info,
+-- and keys in both lists, and looks up the value in the appropriate list
+getSetting :: Either [(String,String)] [(String,String)] -> String -> String -> Either String String
+getSetting settings kh kr = case settings of
+  Left settings -> go settings kh
+  Right settings -> go settings kr
+  where
+    go settings k =  case lookup k settings of
+      Nothing -> Left (show k ++ " not found in settings: " ++ show settings)
+      Just v -> Right v
+
+generatePlatformHostHs :: Either [(String,String)] [(String,String)] -> String
 generatePlatformHostHs settings = either error id $ do
-    let getSetting k = case lookup k settings of
-          Nothing -> Left (show k ++ " not found in settings")
-          Just v -> Right v
-    cHostPlatformArch <- getSetting "target arch"
-    cHostPlatformOS   <- getSetting "target os"
+    let getSetting' = getSetting settings
+    cHostPlatformArch <- getSetting' "hostPlatformArch" "target arch"
+    cHostPlatformOS   <- getSetting' "hostPlatformOS"   "target os"
     return $ unlines
         [ "module GHC.Platform.Host where"
         , ""
@@ -69,17 +82,16 @@ generatePlatformHostHs settings = either error id $ do
         , "hostPlatformArchOS = ArchOS hostPlatformArch hostPlatformOS"
         ]
 
-generateVersionHs :: [(String,String)] -> String
+generateVersionHs :: Either [(String,String)] [(String,String)] -> String
 generateVersionHs settings = either error id $ do
-    let getSetting k = case lookup k settings of
-          Nothing -> Left (show k ++ " not found in settings")
-          Just v -> Right v
-    cProjectGitCommitId <- getSetting "Project Git commit id"
-    cProjectVersion     <- getSetting "Project version"
-    cProjectVersionInt  <- pure $ show $ __GLASGOW_HASKELL__
-    cProjectPatchLevel  <- pure $ show $ __GLASGOW_HASKELL_PATCHLEVEL1__
-    cProjectPatchLevel1 <- pure $ cProjectPatchLevel
-    cProjectPatchLevel2 <- pure ""
+    let getSetting' = getSetting settings
+    cProjectGitCommitId <- getSetting' "cProjectGitCommitId" "Project Git commit id"
+    cProjectVersion     <- getSetting' "cProjectVersion"     "Project version"
+    cProjectVersionInt  <- getSetting' "cProjectVersionInt"  "Project Version Int"
+
+    cProjectPatchLevel  <- getSetting' "cProjectPatchLevel"  "Project Patch Level"
+    cProjectPatchLevel1 <- getSetting' "cProjectPatchLevel1" "Project Patch Level1"
+    cProjectPatchLevel2 <- getSetting' "cProjectPatchLevel2" "Project Patch Level2"
     return $ unlines
         [ "module GHC.Version where"
         , ""

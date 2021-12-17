@@ -70,6 +70,7 @@ stage0Packages = do
              , genapply
              , genprimopcode
              , ghc
+             , ghcAbiHash
              , ghcBoot
              , ghcBootTh
              , ghcHeap
@@ -110,6 +111,7 @@ stage1Packages = do
         , exceptions
         , filepath
         , ghc
+        , ghcAbiHash
         , ghcBignum
         , ghcCompact
         , ghcPkg

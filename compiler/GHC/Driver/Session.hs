@@ -205,6 +205,7 @@ module GHC.Driver.Session (
         LinkerInfo(..),
         CompilerInfo(..),
         useXLinkerRPath,
+        LinkedAbiHashes,
 
         -- * Include specifications
         IncludeSpecs(..), addGlobalInclude, addQuoteInclude, flattenIncludes,
@@ -278,6 +279,7 @@ import System.IO
 import System.IO.Error
 import Text.ParserCombinators.ReadP hiding (char)
 import Text.ParserCombinators.ReadP as R
+import qualified GHC.Data.ShortText as ST
 
 import GHC.Data.EnumSet (EnumSet)
 import qualified GHC.Data.EnumSet as EnumSet
@@ -728,7 +730,13 @@ data DynFlags = DynFlags {
 
   -- | Temporary: CFG Edge weights for fast iterations
   cfgWeights            :: Weights
-}
+
+  }
+
+-- | The ABI Hashes of GHC and all its dependencies
+-- Use ghc-abihash:GHC.AbiHash.ghcAbiHashes to populate this field
+-- See Note [Loader Consistency Checks]
+type LinkedAbiHashes = Map.Map UnitId ST.ShortText
 
 class HasDynFlags m where
     getDynFlags :: m DynFlags
@@ -4601,6 +4609,10 @@ compilerInfo dflags
           (rawSettings dflags)
    ++ [("Project version",             projectVersion dflags),
        ("Project Git commit id",       cProjectGitCommitId),
+       ("Project Version Int",         cProjectVersionInt),
+       ("Project Patch Level",         cProjectPatchLevel),
+       ("Project Patch Level1",        cProjectPatchLevel1),
+       ("Project Patch Level2",        cProjectPatchLevel2),
        ("Booter version",              cBooterVersion),
        ("Stage",                       cStage),
        ("Build platform",              cBuildPlatformString),

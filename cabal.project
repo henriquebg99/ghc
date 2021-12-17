@@ -4,39 +4,40 @@ packages: ./compiler
           ./ghc/
           -- ./libraries/array
           -- ./libraries/base
-          -- ./libraries/binary
-          -- ./libraries/bytestring
-          -- ./libraries/Cabal/Cabal
-          -- ./libraries/containers/containers/
+          ./libraries/binary
+          ./libraries/bytestring
+          ./libraries/Cabal/Cabal
+          ./libraries/containers/containers/
           -- ./libraries/deepseq/
-          -- ./libraries/directory/
-          -- ./libraries/exceptions/
+          ./libraries/directory/
+          ./libraries/exceptions/
           -- ./libraries/filepath/
           -- ./libraries/ghc-bignum/
-          ./libraries/ghc-boot/
+           ./libraries/ghc-boot/
           -- ./libraries/ghc-boot-th/
-          -- ./libraries/ghc-compact
-          -- ./libraries/ghc-heap
+          ./libraries/ghc-abihash/
+          ./libraries/ghc-compact
+          ./libraries/ghc-heap
           ./libraries/ghci
           -- ./libraries/ghc-prim
-          -- ./libraries/haskeline
-          -- ./libraries/directory
+          ./libraries/haskeline
+          ./libraries/directory
           ./libraries/hpc
           -- ./libraries/integer-gmp
           ./libraries/libiserv/
-          -- ./libraries/mtl/
-          -- ./libraries/parsec/
+          ./libraries/mtl/
+          ./libraries/parsec/
           -- ./libraries/pretty/
-          -- ./libraries/process/
-          -- ./libraries/stm
+          ./libraries/process/
+          ./libraries/stm
           -- ./libraries/template-haskell/
-          -- ./libraries/terminfo/
-          -- ./libraries/text
-          -- ./libraries/time
-          -- ./libraries/transformers/
-          -- ./libraries/unix/
-          -- ./libraries/Win32/
-          -- ./libraries/xhtml/
+          ./libraries/terminfo/
+          ./libraries/text
+          ./libraries/time
+          ./libraries/transformers/
+          ./libraries/unix/
+          ./libraries/Win32/
+          ./libraries/xhtml/
           ./utils/ghc-pkg
           ./utils/haddock
           ./utils/hp2ps
@@ -53,34 +54,34 @@ constraints: ghc +internal-interpreter,
              -- any.Cabal installed,
              any.array installed,
              any.base installed,
-             any.binary installed,
-             any.bytestring installed,
-             any.containers installed,
+             -- any.binary installed,
+             -- any.bytestring installed,
+             -- any.containers installed,
              any.deepseq installed,
-             any.directory installed,
-             any.exceptions installed,
+             -- any.directory installed,
+             -- any.exceptions installed,
              any.filepath installed,
              any.ghc-bignum installed,
              any.ghc-boot-th installed,
-             any.ghc-compact installed,
-             any.ghc-heap installed,
-             any.ghc-prim installed,
-             any.haskeline installed,
-             any.directory installed,
+             -- any.ghc-compact installed,
+             -- any.ghc-heap installed,
+             -- any.ghc-prim installed,
+             -- any.haskeline installed,
+             -- any.directory installed,
              any.integer-gmp installed,
-             any.mtl installed,
-             any.parsec installed,
+             -- any.mtl installed,
+             -- any.parsec installed,
              any.pretty installed,
-             any.process installed,
-             any.stm installed,
+             -- any.process installed,
+             -- any.stm installed,
              any.template-haskell installed,
-             any.terminfo installed,
-             any.text installed,
-             any.time installed,
-             any.transformers installed,
-             any.unix installed,
-             any.Win32 installed,
-             any.xhtml installed 
+             -- any.terminfo installed,
+             -- any.text installed,
+             -- any.time installed,
+             -- any.transformers installed,
+             -- any.unix installed,
+             -- any.Win32 installed,
+             -- any.xhtml installed 
 
 allow-newer:
   ghc-paths:Cabal,
