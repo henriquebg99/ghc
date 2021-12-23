@@ -28,7 +28,7 @@ module GHC.Core.Utils (
         exprIsCheap, exprIsExpandable, exprIsCheapX, CheapAppFun,
         exprIsHNF, exprOkForSpeculation, exprOkForSideEffects, exprIsWorkFree,
         exprIsConLike,
-        isCheapApp, isExpandableApp,
+        isCheapApp, isExpandableApp, isSaturatedConApp,
         exprIsTickedString, exprIsTickedString_maybe,
         exprIsTopLevelBindable,
         altsAreExhaustive,
@@ -374,8 +374,9 @@ mkTick t orig_expr = mkTick' id id orig_expr
       -> top $ Tick (mkNoScope t) $ rest $ Lam x $ mkTick (mkNoCount t) e
 
     App f arg
-      -- Always float through type applications.
-      | not (isRuntimeArg arg)
+      -- See Note [Float runtime ticks through type applications]
+      -- -- Always float through type applications.
+      | not (isRuntimeArg arg) -- && tickishPlace t /= PlaceRuntime
       -> mkTick' (top . flip App arg) rest f
 
       -- We can also float through constructor applications, placement

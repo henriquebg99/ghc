@@ -965,7 +965,7 @@ myCollectArgs expr
     go h@(Var _v)       as ts = (h, as, ts)
     go (App f a)        as ts = go f (a:as) ts
     go (Tick t e)       as ts = assertPpr (not (tickishIsCode t) || all isTypeArg as)
-                                          (ppr e $$ ppr as $$ ppr ts) $
+                                          (ppr e $$ ppr as $$ ppr ts $$ text "isCode:" <> ppr (tickishIsCode t)) $
                                 -- See Note [Ticks in applications]
                                 go e as (t:ts) -- ticks can appear in type apps
     go (Cast e _)       as ts = go e as ts
