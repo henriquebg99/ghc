@@ -61,7 +61,6 @@ import GHC.Builtin.Types ( liftedRepTy, manyDataConTy, liftedDataConTy )
 import GHC.Core.Unify    ( tcMatchTyKi )
 import GHC.Utils.Misc
 import GHC.Utils.Panic
-import GHC.Types.Unique.Set
 import GHC.Types.Var
 import GHC.Types.Var.Set
 import GHC.Types.Basic    ( IntWithInf, intGtLimit
@@ -73,8 +72,7 @@ import Control.Monad
 import Data.Foldable      ( toList )
 import Data.List          ( partition )
 import Data.List.NonEmpty ( NonEmpty(..) )
-import GHC.Data.Maybe     ( mapMaybe, maybeToList )
-import qualified Data.Semigroup as S
+import GHC.Data.Maybe     ( mapMaybe )
 
 {-
 *********************************************************************************
@@ -1144,43 +1142,24 @@ simplifyInfer rhs_tclvl infer_mode sigs name_taus wanteds
        ; wanted_transformed <- TcM.zonkWC wanted_transformed
        ; let definite_error = insolubleWC wanted_transformed
                               -- See Note [Quantification with errors]
-             (quant_ct_candidates, residual_wc, did_fds_combine)
-               | definite_error = (emptyBag, wanted_transformed, mempty)
-               | otherwise      = approximateWC False wanted_transformed
-
-       -- See Note [Simplifying the approximated WC]
-       ; (quant_pred_candidates, final_residual_wc) <- case did_fds_combine of
-           NoCombinationYet _ -> do { traceTc "skipping simplifying the approximated WC"
-                                              (ppr quant_ct_candidates)
-                                    ; return ( ctsPreds quant_ct_candidates
-                                             , wanted_transformed ) }
-           YesFDsCombined
-             -> do { traceTc "simplifying approximateWC {" (ppr quant_ct_candidates)
-                   ; _ <- promoteTyVarSet (tyCoVarsOfCts quant_ct_candidates)
-                     -- this promotion re-establishes WantedInv of
-                     -- Note [TcLevel invariants] in GHC.Tc.Utils.TcType.
-
-                   ; simplified_wc <- setTcLevel rhs_tclvl $
-                                      runTcSWithEvBinds ev_binds_var $
-                                      solveSimpleWanteds quant_ct_candidates
-                   ; traceTc "simplifying approximateWC }" (ppr simplified_wc)
-                   ; return ( ctsPreds (wc_simple simplified_wc)
-                            , residual_wc `andWC` simplified_wc ) }
+             quant_pred_candidates
+               | definite_error = []
+               | otherwise      = ctsPreds (approximateWC False wanted_transformed)
 
        -- Decide what type variables and constraints to quantify
        -- NB: quant_pred_candidates is already fully zonked
        -- NB: bound_theta are constraints we want to quantify over,
        --     including the psig_theta, which we always quantify over
        -- NB: bound_theta are fully zonked
-       ; (qtvs, bound_theta, co_vars) <- decideQuantification infer_mode rhs_tclvl
-                                                     name_taus partial_sigs
-                                                     quant_pred_candidates
+       ; (qtvs, bound_theta, co_vars)
+           <- decideQuantification infer_mode rhs_tclvl ev_binds_var name_taus
+                                   partial_sigs quant_pred_candidates
        ; bound_theta_vars <- mapM TcM.newEvVar bound_theta
 
        -- Now emit the residual constraint
        ; emitResidualConstraints rhs_tclvl ev_binds_var
                                  name_taus co_vars qtvs bound_theta_vars
-                                 final_residual_wc
+                                 wanted_transformed
 
          -- All done!
        ; traceTc "} simplifyInfer/produced residual implication for quantification" $
@@ -1444,6 +1423,7 @@ the quantified variables.
 decideQuantification
   :: InferMode
   -> TcLevel
+  -> EvBindsVar            -- where to put evidence
   -> [(Name, TcTauType)]   -- Variables to be generalised
   -> [TcIdSigInst]         -- Partial type signatures (if any)
   -> [PredType]            -- Candidate theta; already zonked
@@ -1451,14 +1431,15 @@ decideQuantification
          , [PredType]      -- and this context (fully zonked)
          , VarSet)
 -- See Note [Deciding quantification]
-decideQuantification infer_mode rhs_tclvl name_taus psigs candidates
+decideQuantification infer_mode rhs_tclvl ev_binds_var name_taus psigs candidates
   = do { -- Step 1: find the mono_tvs
        ; (mono_tvs, candidates, co_vars) <- decideMonoTyVars infer_mode
                                               name_taus psigs candidates
 
        -- Step 2: default any non-mono tyvars, and re-simplify
        -- This step may do some unification, but result candidates is zonked
-       ; candidates <- defaultTyVarsAndSimplify rhs_tclvl mono_tvs candidates
+       ; candidates <- defaultTyVarsAndSimplify rhs_tclvl ev_binds_var
+                                                mono_tvs candidates
 
        -- Step 3: decide which kind/type variables to quantify over
        ; qtvs <- decideQuantifiedTyVars name_taus psigs candidates
@@ -1617,17 +1598,18 @@ decideMonoTyVars infer_mode name_taus psigs candidates
 
 -------------------
 defaultTyVarsAndSimplify :: TcLevel
+                         -> EvBindsVar          -- where to put evidence
                          -> TyCoVarSet          -- Promote these mono-tyvars
                          -> [PredType]          -- Assumed zonked
                          -> TcM [PredType]      -- Guaranteed zonked
 -- Promote the known-monomorphic tyvars;
 -- Default any tyvar free in the constraints;
 -- and re-simplify in case the defaulting allows further simplification
-defaultTyVarsAndSimplify rhs_tclvl mono_tvs candidates
+defaultTyVarsAndSimplify rhs_tclvl ev_binds_var mono_tvs candidates
   = do {  -- Promote any tyvars that we cannot generalise
           -- See Note [Promote monomorphic tyvars]
        ; traceTc "decideMonoTyVars: promotion:" (ppr mono_tvs)
-       ; any_promoted <- promoteTyVarSet mono_tvs
+       ; _ <- promoteTyVarSet mono_tvs
 
        -- Default any kind/levity vars
        ; DV {dv_kvs = cand_kvs, dv_tvs = cand_tvs}
@@ -1637,37 +1619,35 @@ defaultTyVarsAndSimplify rhs_tclvl mono_tvs candidates
                 -- the constraints generated
 
        ; poly_kinds  <- xoptM LangExt.PolyKinds
-       ; default_kvs <- mapM (default_one poly_kinds True)
-                             (dVarSetElems cand_kvs)
-       ; default_tvs <- mapM (default_one poly_kinds False)
-                             (dVarSetElems (cand_tvs `minusDVarSet` cand_kvs))
-       ; let some_default = or default_kvs || or default_tvs
+       ; mapM_ (default_one poly_kinds True) (dVarSetElems cand_kvs)
+       ; mapM_ (default_one poly_kinds False) (dVarSetElems (cand_tvs `minusDVarSet` cand_kvs))
 
-       ; if | some_default -> simplify_cand candidates
-            | any_promoted -> mapM TcM.zonkTcType candidates
-            | otherwise    -> return candidates
+       ; simplify_cand candidates
        }
   where
     default_one poly_kinds is_kind_var tv
       | not (isMetaTyVar tv)
-      = return False
+      = return ()
       | tv `elemVarSet` mono_tvs
-      = return False
+      = return ()
       | otherwise
-      = defaultTyVar
+      = void $ defaultTyVar
           (if not poly_kinds && is_kind_var
            then DefaultKindVars
            else NonStandardDefaulting DefaultNonStandardTyVars)
           -- NB: only pass 'DefaultKindVars' when we know we're dealing with a kind variable.
           tv
 
+       -- this common case (no inferred contraints) should be fast
+    simplify_cand [] = return []
     simplify_cand candidates
       = do { clone_wanteds <- newWanteds DefaultOrigin candidates
            ; WC { wc_simple = simples } <- setTcLevel rhs_tclvl $
-                                           simplifyWantedsTcM clone_wanteds
+                                           runTcSWithEvBinds ev_binds_var $
+                                           solveWanteds (mkSimpleWC clone_wanteds)
               -- Discard evidence; simples is fully zonked
 
-           ; let new_candidates = ctsPreds simples
+           ; new_candidates <- TcM.zonkTcTypes (ctsPreds simples)
            ; traceTc "Simplified after defaulting" $
                       vcat [ text "Before:" <+> ppr candidates
                            , text "After:"  <+> ppr new_candidates ]
@@ -2707,7 +2687,7 @@ defaultTyVarTcS the_tv
   | otherwise
   = return False  -- the common case
 
-approximateWC :: Bool -> WantedConstraints -> (Cts, WantedConstraints, DidFDsCombine)
+approximateWC :: Bool -> WantedConstraints -> Cts
 -- Second return value is the depleted wc
 -- Third return value is YesFDsCombined <=> multiple constraints for the same fundep floated
 -- See Note [Simplifying the approximated WC]
@@ -2717,31 +2697,16 @@ approximateWC :: Bool -> WantedConstraints -> (Cts, WantedConstraints, DidFDsCom
 approximateWC float_past_equalities wc
   = float_wc emptyVarSet wc
   where
-    float_wc :: TcTyCoVarSet -> WantedConstraints -> (Cts, WantedConstraints, DidFDsCombine)
-    float_wc trapping_tvs old_wc@(WC { wc_simple = simples, wc_impl = implics })
-      = ( floated_from_simple `unionBags` floated_from_implics
-        , old_wc { wc_simple = cannot_float_simple
-                 , wc_impl   = new_implics }
-        , NoCombinationYet (mkUniqSet floated_fd_classes) S.<> fds_combined_from_implics )
-      where
-        (floated_from_simple, cannot_float_simple)
-          = partitionBag (is_floatable trapping_tvs) simples
-        floated_fd_classes
-          = [ cls
-            | one_floater <- bagToList floated_from_simple
-            , (cls, _) <- maybeToList $ getClassPredTys_maybe (ctPred one_floater)
-            , classHasFds cls ]
-        (floated_from_implics, new_implics, fds_combined_from_implics)
-          = foldMap (float_implic trapping_tvs) implics
-            -- should this be foldMap'?
-
-    float_implic :: TcTyCoVarSet -> Implication -> (Cts, Bag Implication, DidFDsCombine)
+    float_wc :: TcTyCoVarSet -> WantedConstraints -> Cts
+    float_wc trapping_tvs (WC { wc_simple = simples, wc_impl = implics })
+      = filterBag (is_floatable trapping_tvs) simples `unionBags`
+        concatMapBag (float_implic trapping_tvs) implics
+    float_implic :: TcTyCoVarSet -> Implication -> Cts
     float_implic trapping_tvs imp
       | float_past_equalities || ic_given_eqs imp /= MaybeGivenEqs
-      = let (floaters, new_wc, fds_combined) = float_wc new_trapping_tvs (ic_wanted imp) in
-        (floaters, unitBag $ imp { ic_wanted = new_wc }, fds_combined)
-      | otherwise                          -- Take care with equalities
-      = (emptyCts, unitBag imp, mempty)    -- See (1) under Note [ApproximateWC]
+      = float_wc new_trapping_tvs (ic_wanted imp)
+      | otherwise   -- Take care with equalities
+      = emptyCts    -- See (1) under Note [ApproximateWC]
       where
         new_trapping_tvs = trapping_tvs `extendVarSetList` ic_skols imp
 
@@ -2749,21 +2714,6 @@ approximateWC float_past_equalities wc
        | isGivenCt ct     = False
        | insolubleEqCt ct = False
        | otherwise        = tyCoVarsOfCt ct `disjointVarSet` skol_tvs
-
-data DidFDsCombine
-  = NoCombinationYet (UniqSet Class)
-      -- set of classes that have at least one constraint
-      -- INVARIANT: each class has at least one FD
-  | YesFDsCombined
-
-instance Semigroup DidFDsCombine where
-  NoCombinationYet set1 <> NoCombinationYet set2
-    | disjointUniqSets set1 set2 = NoCombinationYet (set1 `unionUniqSets` set2)
-
-  _ <> _ = YesFDsCombined
-
-instance Monoid DidFDsCombine where
-  mempty = NoCombinationYet emptyUniqSet
 
 {- Note [ApproximateWC]
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -2824,7 +2774,7 @@ you want.  So I simply removed the extra code to implement the
 contamination stuff.  There was zero effect on the testsuite (not even #8155).
 ------ End of historical note -----------
 
-Note [Simplifying the approximated WC]
+Note [Simplifying the approximated WC] "RAE"
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Suppose we have
 
@@ -3019,7 +2969,7 @@ findDefaultableGroups (default_tys, (ovl_strings, extended_defaults)) wanteds
     , defaultable_tyvar tv
     , defaultable_classes (map sndOf3 group) ]
   where
-    (simples, _, _)        = approximateWC True wanteds
+    simples                = approximateWC True wanteds
     (unaries, non_unaries) = partitionWith find_unary (bagToList simples)
     unary_groups           = equivClasses cmp_tv unaries
 
