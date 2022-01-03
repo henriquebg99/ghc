@@ -355,3 +355,5 @@ test('T19586', normal, compile, [''])
 test('T19581', [ grep_errmsg(r'case') ], compile, ['-O -ddump-simpl -dsuppress-uniques'])
 test('T20112',  normal, multimod_compile, ['T20112', '-O -v0 -g1'])
 test('T20639', normal, compile, ['-O2'])
+
+test('T20894', normal, compile, ['-dcore-lint -O1 -ddebug-output'])
