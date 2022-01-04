@@ -68,6 +68,7 @@ module GHC.Tc.Types.Constraint (
         ctEvRole, setCtEvLoc, arisesFromGivens,
         tyCoVarsOfCtEvList, tyCoVarsOfCtEv, tyCoVarsOfCtEvsList,
         ctEvUnique, tcEvDestUnique,
+        isHoleDestPred,
 
         RewriterSet(..), emptyRewriterSet, isEmptyRewriterSet,
            -- exported concretely only for anyUnfilledCoercionHoles
@@ -1651,6 +1652,16 @@ isWanted _ = False
 isGiven :: CtEvidence -> Bool
 isGiven (CtGiven {})  = True
 isGiven _ = False
+
+-- | When creating a constraint for the given predicate, should
+-- it get a 'HoleDest'? True for equalities and Concrete# constraints
+-- only. See Note [The Concrete mechanism] in GHC.Tc.Utils.Concrete
+isHoleDestPred :: PredType -> Bool
+isHoleDestPred pty = case classifyPredType pty of
+  EqPred {}                      -> True
+  SpecialPred ConcretePrimPred _ -> True
+  _                              -> False
+
 
 {-
 ************************************************************************

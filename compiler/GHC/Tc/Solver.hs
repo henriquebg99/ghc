@@ -1152,7 +1152,7 @@ simplifyInfer rhs_tclvl infer_mode sigs name_taus wanteds
        --     including the psig_theta, which we always quantify over
        -- NB: bound_theta are fully zonked
        ; (qtvs, bound_theta, co_vars)
-           <- decideQuantification infer_mode rhs_tclvl ev_binds_var name_taus
+           <- decideQuantification infer_mode rhs_tclvl name_taus
                                    partial_sigs quant_pred_candidates
        ; bound_theta_vars <- mapM TcM.newEvVar bound_theta
 
@@ -1423,7 +1423,6 @@ the quantified variables.
 decideQuantification
   :: InferMode
   -> TcLevel
-  -> EvBindsVar            -- where to put evidence
   -> [(Name, TcTauType)]   -- Variables to be generalised
   -> [TcIdSigInst]         -- Partial type signatures (if any)
   -> [PredType]            -- Candidate theta; already zonked
@@ -1431,15 +1430,14 @@ decideQuantification
          , [PredType]      -- and this context (fully zonked)
          , VarSet)
 -- See Note [Deciding quantification]
-decideQuantification infer_mode rhs_tclvl ev_binds_var name_taus psigs candidates
+decideQuantification infer_mode rhs_tclvl name_taus psigs candidates
   = do { -- Step 1: find the mono_tvs
        ; (mono_tvs, candidates, co_vars) <- decideMonoTyVars infer_mode
                                               name_taus psigs candidates
 
        -- Step 2: default any non-mono tyvars, and re-simplify
        -- This step may do some unification, but result candidates is zonked
-       ; candidates <- defaultTyVarsAndSimplify rhs_tclvl ev_binds_var
-                                                mono_tvs candidates
+       ; candidates <- defaultTyVarsAndSimplify rhs_tclvl mono_tvs candidates
 
        -- Step 3: decide which kind/type variables to quantify over
        ; qtvs <- decideQuantifiedTyVars name_taus psigs candidates
@@ -1598,14 +1596,13 @@ decideMonoTyVars infer_mode name_taus psigs candidates
 
 -------------------
 defaultTyVarsAndSimplify :: TcLevel
-                         -> EvBindsVar          -- where to put evidence
                          -> TyCoVarSet          -- Promote these mono-tyvars
                          -> [PredType]          -- Assumed zonked
                          -> TcM [PredType]      -- Guaranteed zonked
 -- Promote the known-monomorphic tyvars;
 -- Default any tyvar free in the constraints;
 -- and re-simplify in case the defaulting allows further simplification
-defaultTyVarsAndSimplify rhs_tclvl ev_binds_var mono_tvs candidates
+defaultTyVarsAndSimplify rhs_tclvl mono_tvs candidates
   = do {  -- Promote any tyvars that we cannot generalise
           -- See Note [Promote monomorphic tyvars]
        ; traceTc "decideMonoTyVars: promotion:" (ppr mono_tvs)
@@ -1641,13 +1638,14 @@ defaultTyVarsAndSimplify rhs_tclvl ev_binds_var mono_tvs candidates
        -- this common case (no inferred contraints) should be fast
     simplify_cand [] = return []
     simplify_cand candidates
-      = do { clone_wanteds <- newWanteds DefaultOrigin candidates
-           ; WC { wc_simple = simples } <- setTcLevel rhs_tclvl $
-                                           runTcSWithEvBinds ev_binds_var $
-                                           solveWanteds (mkSimpleWC clone_wanteds)
+      = do { WC { wc_simple = simples } <- setTcLevel rhs_tclvl $
+             do { wanteds <- newWanteds DefaultOrigin candidates
+                   -- build wanteds at bumped level because newConcreteHole
+                   -- whips up fresh metavariables
+                ; simplifyWantedsTcM wanteds }
               -- Discard evidence; simples is fully zonked
 
-           ; new_candidates <- TcM.zonkTcTypes (ctsPreds simples)
+           ; let new_candidates = ctsPreds simples
            ; traceTc "Simplified after defaulting" $
                       vcat [ text "Before:" <+> ppr candidates
                            , text "After:"  <+> ppr new_candidates ]

@@ -168,6 +168,7 @@ import GHC.Tc.Types.Constraint
 import GHC.Tc.Utils.Unify
 import GHC.Core.Predicate
 import GHC.Types.Unique.Set (nonDetEltsUniqSet)
+import GHC.Utils.Panic.Plain
 
 import Control.Monad
 import GHC.Utils.Monad
@@ -1791,7 +1792,8 @@ newWantedEvVar :: CtLoc -> RewriterSet
                -> TcPredType -> TcS MaybeNew
 -- For anything except ClassPred, this is the same as newWantedEvVarNC
 newWantedEvVar loc rewriters pty
-  = do { mb_ct <- lookupInInerts loc pty
+  = assert (not (isHoleDestPred pty)) $
+    do { mb_ct <- lookupInInerts loc pty
        ; case mb_ct of
             Just ctev
               -> do { traceTcS "newWantedEvVar/cache hit" $ ppr ctev

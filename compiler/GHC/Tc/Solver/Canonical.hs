@@ -955,6 +955,44 @@ here are some examples:
       ==> the second constraint can be decomposed again; 'RuntimeRep' and '[]' are concrete, so we get
         C: Concrete# Rep, C: Concrete# rr
 
+Note [Solving Concrete constraints requires simplifyArgsWorker]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+We have
+  [W] co :: Concrete# [LiftedRep, IntRep]
+and wish to canonicalise it so that we can solve it. Of course, that's really
+  [W] co :: Concrete# ((:) @RuntimeRep LiftedRep ((:) @RuntimeRep IntRep ('[] @RuntimeRep)))
+
+We can decompose to
+  [W] co1 :: Concrete# RuntimeRep
+  [W] co2 :: Concrete# LiftedRep
+  [W] co3 :: Concrete# ((:) @RuntimeRep IntRep ('[] @RuntimeRep))
+
+Recall (Note [The Concrete mechanism] in GHC.Tc.Utils.Concrete) that the evidence for
+a Concrete# ty constraint is a coercion of type ty ~# alpha, where we require a concrete
+type (one that responds True to GHC.Core.Type.isConcrete) to fill in alpha when solving
+the constraint. Accordingly, when we create these new Concrete# constraints, we create
+new metavariables alpha1 :: Type, alpha2 :: RuntimeRep, alpha3 :: [RuntimeRep], with:
+
+  co1 :: RuntimeRep ~# alpha1
+  co2 :: LiftedRep ~# alpha2
+  co3 :: '[IntRep] ~# alpha3
+
+and we already have
+
+  co :: [LiftedRep, IntRep] ~# alpha0
+
+We are now solving co. What do we fill in alpha0 with? The naive answer is to say
+
+  alpha0 := (:) alpha1 alpha2 alpha3
+
+but this would be ill-kinded! The first problem is that `(:) alpha1` expects its next
+argument to have kind alpha1. (The next argument -- alpha3 -- is problematic, too.) The
+second problem is that alpha0 :: [RuntimeRep], but the right-hand side above has kind
+[alpha1]. Happily, we have a solution close to hand: simplifyArgsWorker, which deals
+with precisely this scenario, of replacing all the arguments to a function (in this case, (:)),
+with new arguments but making sure the kinds line up. All we have to do is bundle the information
+we have in a form simplifyArgsWorker likes, and then do the reverse from its result.
+
 -}
 
 -- | Canonicalise a 'Concrete#' constraint.
@@ -1005,13 +1043,19 @@ canDecomposableConcretePrim :: CtEvidence
 canDecomposableConcretePrim ev f_tc args
   = do { traceTcS "canDecomposableConcretePrim" $
            vcat [text "args =" <+> ppr args, text "ev =" <+> ppr ev]
-       ; arg_cos <- mapM (emit_new_concretePrim_wanted (ctEvLoc ev)) args
-       ; case ev of
-          CtWanted { ctev_dest = dest }
-            -> setWantedEvTerm dest (evCoercion $ mkTyConAppCo Nominal f_tc arg_cos)
-          _ -> pprPanic "canDecomposableConcretePrim: non-Wanted" $
-                  vcat [ text "ev =" <+> ppr ev
-                       , text "args =" <+> ppr args ]
+       ; (arg_cos, rhs_args)
+           <- mapAndUnzipM (emit_new_concretePrim_wanted (ctEvLoc ev)) args
+
+       -- See Note [Solving Concrete constraints requires simplifyArgsWorker]
+       ; let (tc_binders, tc_res_kind) = splitPiTys (tyConKind f_tc)
+             fvs_args = tyCoVarsOfTypes rhs_args
+             ArgsReductions reductions final_co
+               = simplifyArgsWorker tc_binders tc_res_kind fvs_args
+                                    (repeat Nominal) (zipWith mkReduction arg_cos rhs_args)
+             Reduction concrete_co uncasted_concrete_rhs = mkTyConAppRedn Nominal f_tc reductions
+             concrete_rhs = uncasted_concrete_rhs `mkCastTyMCo` mkSymMCo final_co
+
+       ; solveConcretePrimWanted ev concrete_co concrete_rhs
        ; stopWith ev "Decomposed Concrete#" }
 
 -- | Canonicalise a non-decomposable 'Concrete#' constraint.
@@ -1029,12 +1073,44 @@ canNonDecomposableConcretePrim ev ty
        ; continueWith new_ct }
 
 -- | Create a new 'Concrete#' Wanted constraint and immediately add it
--- to the work list.
-emit_new_concretePrim_wanted :: CtLoc -> Type -> TcS Coercion
+-- to the work list. Returns the evidence (a coercion hole) used for the
+-- constraint, and the right-hand type (a metavariable) of that coercion
+emit_new_concretePrim_wanted :: CtLoc -> Type -> TcS (Coercion, TcType)
 emit_new_concretePrim_wanted loc ty
-  = do { (hole, wanted) <- wrapTcS $ newConcretePrimWanted loc ty
+  = do { (hole, rhs_ty, wanted) <- wrapTcS $ newConcretePrimWanted loc ty
        ; emitWorkNC [wanted]
-       ; return $ mkHoleCo hole }
+       ; return (mkHoleCo hole, rhs_ty) }
+
+-- | Solve a Wanted 'Concrete#' constraint.
+--
+-- Recall that, when we create a Wanted constraint of the form @Concrete# ty@,
+-- we create a metavariable @concrete_tau@ and a coercion hole of type
+-- @ty ~# concrete_tau@.
+--
+-- When we want to solve this constraint, because we have found that
+-- @ty@ is indeed equal to a concrete type @rhs@, we thus need to do
+-- two things:
+--
+--  1. fill the metavariable @concrete_tau := rhs@,
+--  2. fill the coercion hole with the evidence for the equality @ty ~# rhs@.
+solveConcretePrimWanted :: HasDebugCallStack
+                        => CtEvidence    -- ^ always a [W] Concrete# ty
+                        -> Coercion      -- ^ @co :: ty ~ rhs@
+                        -> TcType        -- ^ @rhs@, which must be concrete
+                        -> TcS ()
+solveConcretePrimWanted (CtWanted { ctev_dest = dest@(HoleDest hole) }) co rhs
+  = do { let Pair _ty     concrete_tau = coVarTypes $ coHoleCoVar hole
+             tau_tv = getTyVar "solveConcretePrimWanted" concrete_tau
+       ; unifyTyVar tau_tv rhs
+       ; setWantedEq dest co }
+
+solveConcretePrimWanted ev co rhs
+  = pprPanic "solveConcretePrimWanted: no coercion hole to fill" $
+      vcat [ text "ev =" <+> ppr ev <> semi <+> text "dest =" <+> case ev of
+               CtWanted { ctev_dest = EvVarDest var } -> text "var" <+> ppr var
+               _                                      -> text "XXX NOT EVEN A WANTED XXX"
+           , text "co =" <+> ppr co
+           , text "rhs =" <+> ppr rhs ]
 
 {- **********************************************************************
 *                                                                      *

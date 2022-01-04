@@ -46,6 +46,8 @@ module GHC.Tc.Utils.TcMType (
   unpackCoercionHole, unpackCoercionHole_maybe,
   checkCoercionHole,
 
+  ConcreteHole, newConcreteHole,
+
   newImplication,
 
   --------------------------------
@@ -194,8 +196,11 @@ newWanted :: CtOrigin -> Maybe TypeOrKind -> PredType -> TcM CtEvidence
 -- Deals with both equality and non-equality predicates
 newWanted orig t_or_k pty
   = do loc <- getCtLocM orig t_or_k
-       d <- if isEqPrimPred pty then HoleDest  <$> newCoercionHole pty
-                                else EvVarDest <$> newEvVar pty
+       d <- case classifyPredType pty of
+              EqPred {} -> HoleDest <$> newCoercionHole pty
+              SpecialPred ConcretePrimPred ty ->
+                HoleDest <$> (fst <$> newConcreteHole (typeKind ty) ty)
+              _ -> EvVarDest <$> newEvVar pty
        return $ CtWanted { ctev_dest      = d
                          , ctev_pred      = pty
                          , ctev_loc       = loc
@@ -210,8 +215,14 @@ newWanteds orig = mapM (newWanted orig Nothing)
 
 cloneWantedCtEv :: CtEvidence -> TcM CtEvidence
 cloneWantedCtEv ctev@(CtWanted { ctev_pred = pty, ctev_dest = HoleDest _ })
+  | isEqPrimPred pty
   = do { co_hole <- newCoercionHole pty
        ; return (ctev { ctev_dest = HoleDest co_hole }) }
+  | SpecialPred ConcretePrimPred ty <- classifyPredType pty
+  = do { (co_hole, _) <- newConcreteHole (typeKind ty) ty
+       ; return (ctev { ctev_dest = HoleDest co_hole }) }
+  | otherwise
+  = pprPanic "cloneWantedCtEv" (ppr pty)
 cloneWantedCtEv ctev = return ctev
 
 cloneWanted :: Ct -> TcM Ct
@@ -399,6 +410,24 @@ checkCoercionHole cv co
              && role == eqRelRole cv_rel
              | otherwise
              = False
+
+-- | A coercion hole used to store evidence for `Concrete#` constraints.
+--
+-- See Note [The Concrete mechanism].
+type ConcreteHole = CoercionHole
+
+-- | Create a new (initially unfilled) coercion hole,
+-- to hold evidence for a @'Concrete#' (ty :: ki)@ constraint.
+newConcreteHole :: Kind -- ^ Kind of the thing we want to ensure is concrete (e.g. 'runtimeRepTy')
+                -> Type -- ^ Thing we want to ensure is concrete (e.g. some 'RuntimeRep')
+                -> TcM (ConcreteHole, TcType)
+                  -- ^ where to put the evidence, and a metavariable to store
+                  -- the concrete type
+newConcreteHole ki ty
+  = do { concrete_ty <- newFlexiTyVarTy ki
+       ; let co_ty = mkHeteroPrimEqPred ki ki ty concrete_ty
+       ; hole <- newCoercionHole co_ty
+       ; return (hole, concrete_ty) }
 
 {- **********************************************************************
 *
