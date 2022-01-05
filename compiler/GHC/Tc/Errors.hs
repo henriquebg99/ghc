@@ -712,7 +712,7 @@ reportWanteds ctxt tc_lvl (WC { wc_simple = simples, wc_impl = implics
     -- report3: suppressed errors should be reported as categorized by either report1
     -- or report2. Keep this in sync with the suppress function above
     report3 = [ ("wanted/wanted fundeps", is_ww_fundep, True, mkGroupReporter mkEqErr)
-              , ("insoluble1c", is_given_eq,            True, mkGivenErrorReporter ) ] -- "RAE"
+              ]
 
     -- rigid_nom_eq, rigid_nom_tv_eq,
     is_dict, is_equality, is_ip, is_FRR, is_irred :: ErrorItem -> Pred -> Bool
