@@ -29,6 +29,7 @@ import GHC.Data.FastString
 import GHC.Core
 import GHC.Core.Opt.Monad
 import GHC.Types.Id
+import GHC.Core.Utils hiding (mkTick)
 import GHC.Core.Utils (mkTick)
 
 addLateCostCentres :: ModGuts -> CoreM ModGuts
@@ -80,3 +81,4 @@ data Env = Env
   , dflags      :: DynFlags
   , ccState     :: CostCentreState
   }
+

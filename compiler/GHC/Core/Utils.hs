@@ -28,7 +28,7 @@ module GHC.Core.Utils (
         exprIsCheap, exprIsExpandable, exprIsCheapX, CheapAppFun,
         exprIsHNF, exprOkForSpeculation, exprOkForSideEffects, exprIsWorkFree,
         exprIsConLike,
-        isCheapApp, isExpandableApp,
+        isCheapApp, isExpandableApp, isSaturatedConApp,
         exprIsTickedString, exprIsTickedString_maybe,
         exprIsTopLevelBindable,
         altsAreExhaustive,
@@ -313,6 +313,16 @@ mkCast expr co
           $$ callStackDoc) $
     (Cast expr co)
 
+
+-- Note [Float ticks through type applications]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- We used to turn tick (foo @ Bar) into (tick foo) @ Bar
+-- However this caused issues for things like tagToEnum# where
+-- we would get (tick tagToEnum#) @ Bar. In CoreToStg we would
+-- then eta expand tagToEnum# giving it a polymorphic type which
+-- is not allowed. Since I also don't really see any advantage of
+-- doing so I just removed this behaviour alltogether.
+
 -- | Wraps the given expression in the source annotation, dropping the
 -- annotation if possible.
 mkTick :: CoreTickish -> CoreExpr -> CoreExpr
@@ -367,10 +377,11 @@ mkTick t orig_expr = mkTick' id id orig_expr
       | canSplit
       -> top $ Tick (mkNoScope t) $ rest $ Lam x $ mkTick (mkNoCount t) e
 
-    App f arg
-      -- Always float through type applications.
-      | not (isRuntimeArg arg)
-      -> mkTick' (top . flip App arg) rest f
+    App _f _arg
+      -- See Note [Float runtime ticks through type applications]
+      -- -- Always float through type applications.
+      -- | not (isRuntimeArg arg) && tickishPlace t /= PlaceRuntime
+      -- -> mkTick' (top . flip App arg) rest f
 
       -- We can also float through constructor applications, placement
       -- permitting. Again we can split.
