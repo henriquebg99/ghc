@@ -258,10 +258,7 @@ compileOne' mHscMessage
        isProfWay   = hasWay (ways lcl_dflags) WayProf
        internalInterpreter = not (gopt Opt_ExternalInterpreter lcl_dflags)
 
-       pipelineOutput = case bcknd of
-         Interpreter -> NoOutputFile
-         NoBackend -> NoOutputFile
-         _ -> Persistent
+       pipelineOutput = backendPipelineOutput bcknd 
 
        logger = hsc_logger hsc_env0
        tmpfs  = hsc_tmpfs hsc_env0
@@ -549,7 +546,7 @@ compileFile hsc_env stop_phase (src, _mb_phase) = do
         -- When linking, the -o argument refers to the linker's output.
         -- otherwise, we use it as the name for the pipeline's output.
         output
-         | NoBackend <- backend dflags, notStopPreprocess = NoOutputFile
+         | not (backendGeneratesCode (backend dflags)), notStopPreprocess = NoOutputFile
                 -- avoid -E -fno-code undesirable interactions. see #20439
          | NoStop <- stop_phase, not (isNoLink ghc_link) = Persistent
                 -- -o foo applies to linker
@@ -750,19 +747,19 @@ hscPipeline pipe_env (hsc_env_with_plugins, mod_sum, hsc_recomp_status) = do
 
 hscBackendPipeline :: P m => PipeEnv -> HscEnv -> ModSummary -> HscBackendAction -> m (ModIface, Maybe Linkable)
 hscBackendPipeline pipe_env hsc_env mod_sum result =
-  case backend (hsc_dflags hsc_env) of
-    NoBackend ->
-      case result of
-        HscUpdate iface ->  return (iface, Nothing)
-        HscRecomp {} -> (,) <$> liftIO (mkFullIface hsc_env (hscs_partial_iface result) Nothing) <*> pure Nothing
-    -- TODO: Why is there not a linkable?
-    -- Interpreter -> (,) <$> use (T_IO (mkFullIface hsc_env (hscs_partial_iface result) Nothing)) <*> pure Nothing
-    _ -> do
+  if backendGeneratesCode (backend (hsc_dflags hsc_env)) then
+    do
       res <- hscGenBackendPipeline pipe_env hsc_env mod_sum result
       when (gopt Opt_BuildDynamicToo (hsc_dflags hsc_env)) $ do
           let dflags' = setDynamicNow (hsc_dflags hsc_env) -- set "dynamicNow"
           () <$ hscGenBackendPipeline pipe_env (hscSetFlags dflags' hsc_env) mod_sum result
       return res
+  else
+    case result of
+      HscUpdate iface ->  return (iface, Nothing)
+      HscRecomp {} -> (,) <$> liftIO (mkFullIface hsc_env (hscs_partial_iface result) Nothing) <*> pure Nothing
+    -- TODO: Why is there not a linkable?
+    -- Interpreter -> (,) <$> use (T_IO (mkFullIface hsc_env (hscs_partial_iface result) Nothing)) <*> pure Nothing
 
 hscGenBackendPipeline :: P m
   => PipeEnv

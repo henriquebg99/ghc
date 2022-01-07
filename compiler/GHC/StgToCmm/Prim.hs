@@ -1769,8 +1769,8 @@ emitPrimOp dflags primop = case primop of
     [_, CmmLit (CmmInt n _) ] -> isJust (exactLog2 n)
     _                         -> False
 
-  ncg  = backend dflags == NCG
-  llvm = backend dflags == LLVM
+  ncg  = useNcgPrimitives $ backend dflags
+  llvm = useLlvmPrimitives $ backend dflags
   x86ish = case platformArch platform of
              ArchX86    -> True
              ArchX86_64 -> True
@@ -2339,9 +2339,8 @@ vecElemProjectCast _        _        _   =  Nothing
 
 checkVecCompatibility :: DynFlags -> PrimOpVecCat -> Length -> Width -> FCode ()
 checkVecCompatibility dflags vcat l w = do
-    when (backend dflags /= LLVM) $
-        sorry $ unlines ["SIMD vector instructions require the LLVM back-end."
-                         ,"Please use -fllvm."]
+    unless (backendSupportsSimd (backend dflags)) $
+        sorry backendNoSimdMessage
     check vecWidth vcat l w
   where
     platform = targetPlatform dflags

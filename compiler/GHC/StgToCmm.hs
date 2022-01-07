@@ -182,11 +182,11 @@ cgTopBinding logger tmpfs dflags = \case
         -- emit either a CmmString literal or dump the string in a file and emit a
         -- CmmFileEmbed literal.
         -- See Note [Embedding large binary blobs] in GHC.CmmToAsm.Ppr
-        let isNCG    = backend dflags == NCG
+        let blobsOK  = backendSupportsEmbeddedBlobs (backend dflags)
             isSmall  = fromIntegral (BS.length str) <= binBlobThreshold dflags
             asString = binBlobThreshold dflags == 0 || isSmall
 
-            (lit,decl) = if not isNCG || asString
+            (lit,decl) = if not blobsOK || asString
               then mkByteStringCLit label str
               else mkFileEmbedLit label $ unsafePerformIO $ do
                      bFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule ".dat"

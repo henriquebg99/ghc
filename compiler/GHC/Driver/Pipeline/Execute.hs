@@ -284,7 +284,7 @@ runAsPhase with_cpp pipe_env hsc_env location input_fn = do
 
         -- LLVM from version 3.0 onwards doesn't support the OS X system
         -- assembler, so we use clang as the assembler instead. (#5636)
-        let (as_prog, get_asm_info) | backend dflags == LLVM
+        let (as_prog, get_asm_info) | backendWantsClangTools (backend dflags)
                     , platformOS platform == OSDarwin
                     = (GHC.SysTools.runClang, pure Clang)
                     | otherwise
@@ -519,28 +519,10 @@ runHscBackendPhase pipe_env hsc_env mod_name src_flavour location result = do
                   hscs_partial_iface = partial_iface,
                   hscs_old_iface_hash = mb_old_iface_hash
                 }
-        -> case backend dflags of
-          NoBackend -> panic "HscRecomp not relevant for NoBackend"
-          Interpreter -> do
-              -- In interpreted mode the regular codeGen backend is not run so we
-              -- generate a interface without codeGen info.
-              final_iface <- mkFullIface hsc_env partial_iface Nothing
-              hscMaybeWriteIface logger dflags True final_iface mb_old_iface_hash location
-
-              (hasStub, comp_bc, spt_entries) <- hscInteractive hsc_env cgguts mod_location
-
-              stub_o <- case hasStub of
-                        Nothing -> return []
-                        Just stub_c -> do
-                            stub_o <- compileStub hsc_env stub_c
-                            return [DotO stub_o]
-
-              let hs_unlinked = [BCOs comp_bc spt_entries]
-              unlinked_time <- getCurrentTime
-              let !linkable = LM unlinked_time (mkHomeModule (hsc_home_unit hsc_env) mod_name)
-                             (hs_unlinked ++ stub_o)
-              return ([], final_iface, Just linkable, panic "interpreter")
-          _ -> do
+        -> if not (backendGeneratesCode (backend dflags)) then
+             panic "HscRecomp not relevant for NoBackend"
+           else if backendInterfaceHasCodegen (backend dflags) then
+             do
               output_fn <- phaseOutputFilenameNew next_phase pipe_env hsc_env (Just location)
               (outputFilename, mStub, foreign_files, cg_infos) <-
                 hscGenHardCode hsc_env cgguts mod_location output_fn
@@ -559,6 +541,27 @@ runHscBackendPhase pipe_env hsc_env mod_name src_flavour location result = do
               -- In future we can split up the driver logic more so that this function
               -- is in TPipeline and in this branch we can invoke the rest of the backend phase.
               return (fos, final_iface, Nothing, outputFilename)
+
+           else
+              -- In interpreted mode the regular codeGen backend is not run so we
+              -- generate a interface without codeGen info.
+            do          
+              final_iface <- mkFullIface hsc_env partial_iface Nothing
+              hscMaybeWriteIface logger dflags True final_iface mb_old_iface_hash location
+
+              (hasStub, comp_bc, spt_entries) <- hscInteractive hsc_env cgguts mod_location
+
+              stub_o <- case hasStub of
+                        Nothing -> return []
+                        Just stub_c -> do
+                            stub_o <- compileStub hsc_env stub_c
+                            return [DotO stub_o]
+
+              let hs_unlinked = [BCOs comp_bc spt_entries]
+              unlinked_time <- getCurrentTime
+              let !linkable = LM unlinked_time (mkHomeModule (hsc_home_unit hsc_env) mod_name)
+                             (hs_unlinked ++ stub_o)
+              return ([], final_iface, Just linkable, panic "interpreter")
 
 
 runUnlitPhase :: HscEnv -> FilePath -> FilePath -> IO FilePath
@@ -1061,7 +1064,7 @@ doCpp logger tmpfs dflags unit_env raw input_fn output_fn = do
                        ])
 
 getBackendDefs :: Logger -> DynFlags -> IO [String]
-getBackendDefs logger dflags | backend dflags == LLVM = do
+getBackendDefs logger dflags | backendWantsLlvmCppMacros (backend dflags) = do
     llvmVer <- figureLlvmVersion logger dflags
     return $ case fmap llvmVersionList llvmVer of
                Just [m] -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,0) ]
@@ -1079,13 +1082,7 @@ getBackendDefs _ _ =
 hscPostBackendPhase :: HscSource -> Backend -> Phase
 hscPostBackendPhase HsBootFile _    =  StopLn
 hscPostBackendPhase HsigFile _      =  StopLn
-hscPostBackendPhase _ bcknd =
-  case bcknd of
-        ViaC        -> HCc
-        NCG         -> As False
-        LLVM        -> LlvmOpt
-        NoBackend   -> StopLn
-        Interpreter -> StopLn
+hscPostBackendPhase _ bcknd = backendNormalSuccessorPhase bcknd
 
 
 compileStub :: HscEnv -> FilePath -> IO FilePath
