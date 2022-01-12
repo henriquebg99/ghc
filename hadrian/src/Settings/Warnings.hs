@@ -27,7 +27,9 @@ ghcWarningsArgs = do
         , notStage0 ? mconcat
         [ libraryPackage       ? pure [ "-Wno-deprecated-flags" ]
         , package base         ? pure [ "-Wno-trustworthy-safe" ]
-        , package binary       ? pure [ "-Wno-deprecations" ]
+        , package binary       ? pure [ "-Wno-deprecations", "-Wno-noncanonical-monadfail-instances" ]
+        , package mtl          ? pure [ "-Wno-noncanonical-monadfail-instances"]
+        , package parsec       ? pure [ "-Wno-noncanonical-monadfail-instances"]
         , package bytestring   ? pure [ "-Wno-inline-rule-shadowing" ]
         , package compiler     ? pure [ "-Wcpp-undef" ]
         , package directory    ? pure [ "-Wno-unused-imports" ]
@@ -50,4 +52,4 @@ ghcWarningsArgs = do
                                       , "-Wno-redundant-constraints"
                                       , "-Wno-orphans" ]
         , package win32        ? pure [ "-Wno-trustworthy-safe" ]
-        , package xhtml        ? pure [ "-Wno-unused-imports" ] ] ]
+        , package xhtml        ? pure [ "-Wno-unused-imports", "-Wno-noncanonical-monadfail-instances" ] ] ]
