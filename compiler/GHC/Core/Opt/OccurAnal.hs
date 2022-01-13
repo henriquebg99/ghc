@@ -1587,6 +1587,7 @@ nodeScore !env new_bndr lb_deps
     is_con_app (App f _)  = is_con_app f
     is_con_app (Lam _ e)  = is_con_app e
     is_con_app (Tick _ e) = is_con_app e
+    is_con_app (Let _ e)  = is_con_app e
     is_con_app _          = False
 
 maxExprSize :: Int
