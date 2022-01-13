@@ -1101,13 +1101,14 @@ getUnfoldingInRuleMatch env
     mode = getMode env
     id_unf id | unf_is_active id = idUnfolding id
               | otherwise        = NoUnfolding
-    unf_is_active id
-     | not (sm_rules mode) = -- active_unfolding_minimal id
-                             isStableUnfolding (realIdUnfolding id)
+    unf_is_active id = isActive (sm_phase mode) (idInlineActivation id)
+{-
+     | not (sm_rules mode) = isStableUnfolding (realIdUnfolding id)
         -- Do we even need to test this?  I think this InScopeEnv
         -- is only consulted if activeRule returns True, which
         -- never happens if sm_rules is False
      | otherwise           = isActive (sm_phase mode) (idInlineActivation id)
+-}
 
 ----------------------
 activeRule :: SimplMode -> Activation -> Bool
