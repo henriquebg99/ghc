@@ -520,6 +520,9 @@ data TcGblEnv
           --
           -- Splices disable recompilation avoidance (see #481)
 
+        tcg_th_needed_mods :: TcRef ModuleSet,
+          -- ^ The set of modules we needed during compile time
+
         tcg_dfun_n  :: TcRef OccSet,
           -- ^ Allows us to choose unique DFun names.
 

@@ -1538,7 +1538,7 @@ hscSimplify' plugins ds_result = do
     hsc_env <- getHscEnv
     hsc_env_with_plugins <- if null plugins -- fast path
         then return hsc_env
-        else liftIO $ flip initializePlugins (Just $ mg_mnwib ds_result)
+        else liftIO $ initializePlugins
                     $ hscUpdateFlags (\dflags -> foldr addPluginModuleName dflags plugins)
                       hsc_env
     {-# SCC "Core2Core" #-}
@@ -1934,7 +1934,7 @@ hscParsedStmt hsc_env stmt = runInteractiveHsc hsc_env $ do
   -- for linking, else we try to link 'main' and can't find it.
   -- Whereas the linker already knows to ignore 'interactive'
   let src_span = srcLocSpan interactiveSrcLoc
-  hval <- liftIO $ hscCompileCoreExpr hsc_env (src_span, Nothing) ds_expr
+  (hval,_) <- liftIO $ hscCompileCoreExpr hsc_env src_span ds_expr
 
   return $ Just (ids, hval, fix_env)
 
@@ -2031,10 +2031,10 @@ hscParsedDecls hsc_env decls = runInteractiveHsc hsc_env $ do
                                 stg_binds data_tycons mod_breaks
 
     let src_span = srcLocSpan interactiveSrcLoc
-    _ <- liftIO $ loadDecls interp hsc_env (src_span, Nothing) cbc
+    _ <- liftIO $ loadDecls interp hsc_env src_span cbc
 
     {- Load static pointer table entries -}
-    liftIO $ hscAddSptEntries hsc_env Nothing (cg_spt_entries tidy_cg)
+    liftIO $ hscAddSptEntries hsc_env (cg_spt_entries tidy_cg)
 
     let tcs = filterOut isImplicitTyCon (mg_tcs simpl_mg)
         patsyns = mg_patsyns simpl_mg
@@ -2059,12 +2059,12 @@ hscParsedDecls hsc_env decls = runInteractiveHsc hsc_env $ do
 
 -- | Load the given static-pointer table entries into the interpreter.
 -- See Note [Grand plan for static forms] in "GHC.Iface.Tidy.StaticPtrTable".
-hscAddSptEntries :: HscEnv -> Maybe ModuleNameWithIsBoot -> [SptEntry] -> IO ()
-hscAddSptEntries hsc_env mnwib entries = do
+hscAddSptEntries :: HscEnv -> [SptEntry] -> IO ()
+hscAddSptEntries hsc_env entries = do
     let interp = hscInterp hsc_env
     let add_spt_entry :: SptEntry -> IO ()
         add_spt_entry (SptEntry i fpr) = do
-            val <- loadName interp hsc_env mnwib (idName i)
+            val <- loadName interp hsc_env (idName i)
             addSptEntry interp fpr val
     mapM_ add_spt_entry entries
 
@@ -2175,13 +2175,13 @@ hscParseThingWithLocation source linenumber parser str = do
 %*                                                                      *
 %********************************************************************* -}
 
-hscCompileCoreExpr :: HscEnv -> (SrcSpan, Maybe ModuleNameWithIsBoot) -> CoreExpr -> IO ForeignHValue
+hscCompileCoreExpr :: HscEnv -> SrcSpan -> CoreExpr -> IO (ForeignHValue, [Module])
 hscCompileCoreExpr hsc_env loc expr =
   case hscCompileCoreExprHook (hsc_hooks hsc_env) of
       Nothing -> hscCompileCoreExpr' hsc_env loc expr
       Just h  -> h                   hsc_env loc expr
 
-hscCompileCoreExpr' :: HscEnv -> (SrcSpan, Maybe ModuleNameWithIsBoot) -> CoreExpr -> IO ForeignHValue
+hscCompileCoreExpr' :: HscEnv -> SrcSpan -> CoreExpr -> IO (ForeignHValue, [Module])
 hscCompileCoreExpr' hsc_env srcspan ds_expr
     = do { {- Simplify it -}
            -- Question: should we call SimpleOpt.simpleOptExpr here instead?
@@ -2220,10 +2220,10 @@ hscCompileCoreExpr' hsc_env srcspan ds_expr
                      [] Nothing
 
            {- load it -}
-         ; fv_hvs <- loadDecls (hscInterp hsc_env) hsc_env srcspan bcos
+         ; (fv_hvs, mods) <- loadDecls (hscInterp hsc_env) hsc_env srcspan bcos
            {- Get the HValue for the root -}
          ; return (expectJust "hscCompileCoreExpr'"
-              $ lookup (idName binding_id) fv_hvs) }
+              $ lookup (idName binding_id) fv_hvs, mods) }
 
 
 {- **********************************************************************

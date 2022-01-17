@@ -206,6 +206,7 @@ mkIfaceTc hsc_env safe_mode mod_details mod_summary
           let hpc_info = emptyHpcInfo other_hpc_info
           used_th <- readIORef tc_splice_used
           dep_files <- (readIORef dependent_files)
+          needed_mods <- readIORef (tcg_th_needed_mods tc_result)
           -- Do NOT use semantic module here; this_mod in mkUsageInfo
           -- is used solely to decide if we should record a dependency
           -- or not.  When we instantiate a signature, the semantic
@@ -213,8 +214,8 @@ mkIfaceTc hsc_env safe_mode mod_details mod_summary
           -- but if you pass that in here, we'll decide it's the local
           -- module and does not need to be recorded as a dependency.
           -- See Note [Identity versus semantic module]
-          usages <- mkUsageInfo hsc_env this_mod hsc_src (imp_mods imports) used_names
-                      dep_files merged
+          usages <- mkUsageInfo hsc_env this_mod (imp_mods imports) used_names
+                      dep_files merged needed_mods
 
           (doc_hdr', doc_map, arg_map) <- extractDocs tc_result
 

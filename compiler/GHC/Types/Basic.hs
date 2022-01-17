@@ -1160,6 +1160,12 @@ instance Outputable (DefMethSpec ty) where
 
 data SuccessFlag = Succeeded | Failed
 
+instance Semigroup SuccessFlag where
+  Failed <> _ = Failed
+  _ <> Failed = Failed
+  _ <> _      = Succeeded
+
+
 instance Outputable SuccessFlag where
     ppr Succeeded = text "Succeeded"
     ppr Failed    = text "Failed"

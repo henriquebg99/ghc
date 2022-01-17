@@ -65,14 +65,13 @@ import GHC.Utils.Exception
 import Control.Monad     ( unless )
 import Data.Maybe        ( mapMaybe )
 import Unsafe.Coerce     ( unsafeCoerce )
-import GHC.Unit.Types (ModuleNameWithIsBoot)
 
 -- | Loads the plugins specified in the pluginModNames field of the dynamic
 -- flags. Should be called after command line arguments are parsed, but before
 -- actual compilation starts. Idempotent operation. Should be re-called if
 -- pluginModNames or pluginModNameOpts changes.
-initializePlugins :: HscEnv -> Maybe ModuleNameWithIsBoot -> IO HscEnv
-initializePlugins hsc_env mnwib
+initializePlugins :: HscEnv -> IO HscEnv
+initializePlugins hsc_env
     -- plugins not changed
   | loaded_plugins <- loadedPlugins (hsc_plugins hsc_env)
   , map lpModuleName loaded_plugins == reverse (pluginModNames dflags)
@@ -80,7 +79,7 @@ initializePlugins hsc_env mnwib
   , all same_args loaded_plugins
   = return hsc_env -- no need to reload plugins FIXME: doesn't take static plugins into account
   | otherwise
-  = do loaded_plugins <- loadPlugins hsc_env mnwib
+  = do loaded_plugins <- loadPlugins hsc_env
        let plugins' = (hsc_plugins hsc_env) { loadedPlugins = loaded_plugins }
        let hsc_env' = hsc_env { hsc_plugins = plugins' }
        withPlugins (hsc_plugins hsc_env') driverPlugin hsc_env'
@@ -90,8 +89,8 @@ initializePlugins hsc_env mnwib
     argumentsForPlugin p = map snd . filter ((== lpModuleName p) . fst)
     dflags = hsc_dflags hsc_env
 
-loadPlugins :: HscEnv -> Maybe ModuleNameWithIsBoot -> IO [LoadedPlugin]
-loadPlugins hsc_env mnwib
+loadPlugins :: HscEnv -> IO [LoadedPlugin]
+loadPlugins hsc_env
   = do { unless (null to_load) $
            checkExternalInterpreter hsc_env
        ; plugins <- mapM loadPlugin to_load
@@ -105,14 +104,14 @@ loadPlugins hsc_env mnwib
       where
         options = [ option | (opt_mod_nm, option) <- pluginModNameOpts dflags
                             , opt_mod_nm == mod_nm ]
-    loadPlugin = loadPlugin' (mkVarOcc "plugin") pluginTyConName hsc_env mnwib
+    loadPlugin = loadPlugin' (mkVarOcc "plugin") pluginTyConName hsc_env
 
 
 loadFrontendPlugin :: HscEnv -> ModuleName -> IO FrontendPlugin
 loadFrontendPlugin hsc_env mod_name = do
     checkExternalInterpreter hsc_env
     fst <$> loadPlugin' (mkVarOcc "frontendPlugin") frontendPluginTyConName
-                hsc_env Nothing mod_name
+                hsc_env mod_name
 
 -- #14335
 checkExternalInterpreter :: HscEnv -> IO ()
@@ -121,8 +120,8 @@ checkExternalInterpreter hsc_env = case interpInstance <$> hsc_interp hsc_env of
     -> throwIO (InstallationError "Plugins require -fno-external-interpreter")
   _ -> pure ()
 
-loadPlugin' :: OccName -> Name -> HscEnv -> Maybe ModuleNameWithIsBoot -> ModuleName -> IO (a, ModIface)
-loadPlugin' occ_name plugin_name hsc_env mnwib mod_name
+loadPlugin' :: OccName -> Name -> HscEnv -> ModuleName -> IO (a, ModIface)
+loadPlugin' occ_name plugin_name hsc_env mod_name
   = do { let plugin_rdr_name = mkRdrQual mod_name occ_name
              dflags = hsc_dflags hsc_env
        ; mb_name <- lookupRdrNameInModuleForPlugins hsc_env mod_name
@@ -136,7 +135,7 @@ loadPlugin' occ_name plugin_name hsc_env mnwib mod_name
             Just (name, mod_iface) ->
 
      do { plugin_tycon <- forceLoadTyCon hsc_env plugin_name
-        ; eith_plugin <- getValueSafely hsc_env mnwib name (mkTyConTy plugin_tycon)
+        ; eith_plugin <- getValueSafely hsc_env name (mkTyConTy plugin_tycon)
         ; case eith_plugin of
             Left actual_type ->
                 throwGhcExceptionIO (CmdLineError $
@@ -192,11 +191,11 @@ forceLoadTyCon hsc_env con_name = do
 -- * If the Name does not exist in the module
 -- * If the link failed
 
-getValueSafely :: HscEnv -> Maybe ModuleNameWithIsBoot -> Name -> Type -> IO (Either Type a)
-getValueSafely hsc_env mnwib val_name expected_type = do
+getValueSafely :: HscEnv -> Name -> Type -> IO (Either Type a)
+getValueSafely hsc_env val_name expected_type = do
   eith_hval <- case getValueSafelyHook hooks of
-    Nothing -> getHValueSafely interp hsc_env mnwib val_name expected_type
-    Just h  -> h                      hsc_env mnwib val_name expected_type
+    Nothing -> getHValueSafely interp hsc_env val_name expected_type
+    Just h  -> h                      hsc_env val_name expected_type
   case eith_hval of
     Left actual_type -> return (Left actual_type)
     Right hval -> do
@@ -207,8 +206,8 @@ getValueSafely hsc_env mnwib val_name expected_type = do
     logger = hsc_logger hsc_env
     hooks  = hsc_hooks hsc_env
 
-getHValueSafely :: Interp -> HscEnv -> Maybe ModuleNameWithIsBoot -> Name -> Type -> IO (Either Type HValue)
-getHValueSafely interp hsc_env mnwib val_name expected_type = do
+getHValueSafely :: Interp -> HscEnv -> Name -> Type -> IO (Either Type HValue)
+getHValueSafely interp hsc_env val_name expected_type = do
     forceLoadNameModuleInterface hsc_env (text "contains a name used in an invocation of getHValueSafely") val_name
     -- Now look up the names for the value and type constructor in the type environment
     mb_val_thing <- lookupType hsc_env val_name
@@ -221,12 +220,12 @@ getHValueSafely interp hsc_env mnwib val_name expected_type = do
              then do
                 -- Link in the module that contains the value, if it has such a module
                 case nameModule_maybe val_name of
-                    Just mod -> do loadModule interp hsc_env mnwib mod
+                    Just mod -> do loadModule interp hsc_env mod
                                    return ()
                     Nothing ->  return ()
                 -- Find the value that we just linked in and cast it given that we have proved it's type
                 hval <- do
-                  v <- loadName interp hsc_env mnwib val_name
+                  v <- loadName interp hsc_env val_name
                   wormhole interp v
                 return (Right hval)
              else return (Left (idType id))

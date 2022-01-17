@@ -35,11 +35,17 @@ import GHC.Data.Maybe
 import Data.List (sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 import GHC.Linker.Types
 import GHC.Linker.Loader ( getLoaderState )
-import GHC.Types.SourceFile
 import GHC.Unit.Finder
+import Control.Applicative
+import Data.Either
+import GHC.Types.Unique.DFM
+import GHC.Types.Unique.DSet
+import qualified Data.Map as M
+import GHC.Unit.Module.Graph
 
 {- Note [Module self-dependency]
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,14 +69,23 @@ its dep_orphs. This was the cause of #14128.
 mkUsedNames :: TcGblEnv -> NameSet
 mkUsedNames TcGblEnv{ tcg_dus = dus } = allUses dus
 
-mkUsageInfo :: HscEnv -> Module -> HscSource -> ImportedMods -> NameSet -> [FilePath]
-            -> [(Module, Fingerprint)] -> IO [Usage]
-mkUsageInfo hsc_env this_mod src dir_imp_mods used_names dependent_files merged
+mkUsageInfo :: HscEnv -> Module -> ImportedMods -> NameSet -> [FilePath]
+            -> [(Module, Fingerprint)] -> ModuleSet -> IO [Usage]
+mkUsageInfo hsc_env this_mod dir_imp_mods used_names dependent_files merged needed_mods
   = do
     eps <- hscEPS hsc_env
     hashes <- mapM getFileHash dependent_files
+    let mod_graph = hsc_mod_graph hsc_env
+    let trans_needed_mods = unionManyModuleSets [ extendModuleSet trans_deps_set mod
+                                                | mod <- moduleSetElts needed_mods
+                                                , let nk = ModNodeKeyWithUid (GWIB (moduleName mod) NotBoot) (toUnitId $ moduleUnit mod)
+                                                , Just trans_deps <- pure $ M.lookup (NodeKey_Module nk) (mgTransDeps mod_graph)
+                                                , let trans_deps_set = mkModuleSet $ mapMaybe nkToMod $ Set.toList trans_deps
+                                                ]
+        nkToMod (NodeKey_Module (ModNodeKeyWithUid (GWIB name _) uid)) = Just (mkModule (RealUnit (Definite uid)) name)
+        nkToMod _ = Nothing
     -- Dependencies on object files due to TH and plugins
-    object_usages <- mkObjectUsage (eps_PIT eps) hsc_env (GWIB (moduleName this_mod) (hscSourceToIsBoot src))
+    object_usages <- mkObjectUsage (eps_PIT eps) hsc_env trans_needed_mods
     let mod_usages = mk_mod_usage_info (eps_PIT eps) hsc_env this_mod
                                        dir_imp_mods used_names
         usages = mod_usages ++ [ UsageFile { usg_file_path = f
@@ -128,21 +143,38 @@ One way to improve this is to either:
 
 -- | Find object files corresponding to the transitive closure of given home
 -- modules and direct object files for pkg dependencies
-mkObjectUsage :: PackageIfaceTable -> HscEnv -> ModuleNameWithIsBoot -> IO [Usage]
-mkObjectUsage pit hsc_env mnwib = do
+mkObjectUsage :: PackageIfaceTable -> HscEnv -> ModuleSet -> IO [Usage]
+mkObjectUsage pit hsc_env trans_needed_mods = do
   case hsc_interp hsc_env of
       Just interp -> do
         mps <- getLoaderState interp
         case mps of
           Just ps -> do
-            let ls = fromMaybe [] $ Map.lookup mnwib (module_deps ps)
-                ds = hs_objs_loaded ps
+            let (ls,ds') = partitionEithers $ map go $ moduleSetElts trans_needed_mods
+                go mod
+                  | isHomeModule home_unit mod = case lookupModuleEnv (bcos_loaded ps) mod <|> lookupModuleEnv (objs_loaded ps) mod of
+                      Nothing -> pprPanic "mkObjectUsage" (ppr mod)
+                      Just lb -> Left lb
+                  | otherwise = Right (moduleUnitId mod)
+
+                ds = loop emptyUniqSet [] ds'
+
+                loop _seen acc [] = acc
+                loop seen acc (uid:uids)
+                  | uid `elementOfUniqSet` seen = loop seen acc uids
+                  | otherwise = case lookupUDFM (pkgs_loaded ps) uid of
+                      Nothing -> pprPanic "mkObjectUsage" (ppr $ map loaded_pkg_uid $ eltsUDFM $ pkgs_loaded ps)
+                      Just pkg_info ->
+                        let new_pkgs = getUniqDSet (loaded_pkg_trans_deps pkg_info) `udfmMinusUFM` getUniqSet seen
+                        in loop (addOneToUniqSet seen uid) (loaded_pkg_hs_objs pkg_info ++ acc) (eltsUDFM new_pkgs ++ uids)
+
             concat <$> sequence (map linkableToUsage ls ++ map librarySpecToUsage ds)
           Nothing -> return []
       Nothing -> return []
 
 
   where
+    home_unit = hsc_home_unit hsc_env
     linkableToUsage (LM _ m uls) = mapM (unlinkedToUsage m) uls
 
     msg m = moduleNameString (moduleName m) ++ "[TH] changed"

@@ -7,6 +7,7 @@ module GHC.Unit.Module.Env
    , extendModuleEnvList_C, plusModuleEnv_C
    , delModuleEnvList, delModuleEnv, plusModuleEnv, lookupModuleEnv
    , lookupWithDefaultModuleEnv, mapModuleEnv, mkModuleEnv, emptyModuleEnv
+   , partitionModuleEnv
    , moduleEnvKeys, moduleEnvElts, moduleEnvToList
    , unitModuleEnv, isEmptyModuleEnv
    , extendModuleEnvWith, filterModuleEnv
@@ -19,7 +20,8 @@ module GHC.Unit.Module.Env
    , emptyModuleSet, mkModuleSet, moduleSetElts
    , extendModuleSet, extendModuleSetList, delModuleSet
    , elemModuleSet, intersectModuleSet, minusModuleSet, unionModuleSet
-   , unitModuleSet
+   , unitModuleSet, isEmptyModuleSet
+   , unionManyModuleSets
 
      -- * InstalledModuleEnv
    , InstalledModuleEnv
@@ -130,6 +132,11 @@ lookupWithDefaultModuleEnv (ModuleEnv e) x m =
 mapModuleEnv :: (a -> b) -> ModuleEnv a -> ModuleEnv b
 mapModuleEnv f (ModuleEnv e) = ModuleEnv (Map.mapWithKey (\_ v -> f v) e)
 
+partitionModuleEnv :: (a -> Bool) -> ModuleEnv a -> (ModuleEnv a, ModuleEnv a)
+partitionModuleEnv f (ModuleEnv e) = (ModuleEnv a, ModuleEnv b)
+  where
+    (a,b) = Map.partition f e
+
 mkModuleEnv :: [(Module, a)] -> ModuleEnv a
 mkModuleEnv xs = ModuleEnv (Map.fromList [(NDModule k, v) | (k,v) <- xs])
 
@@ -170,6 +177,9 @@ extendModuleSetList s ms = foldl' (coerce . flip Set.insert) s ms
 emptyModuleSet :: ModuleSet
 emptyModuleSet = Set.empty
 
+isEmptyModuleSet :: ModuleSet -> Bool
+isEmptyModuleSet = Set.null
+
 moduleSetElts :: ModuleSet -> [Module]
 moduleSetElts = sort . coerce . Set.toList
 
@@ -187,6 +197,9 @@ delModuleSet = coerce (flip Set.delete)
 
 unionModuleSet :: ModuleSet -> ModuleSet -> ModuleSet
 unionModuleSet = coerce Set.union
+
+unionManyModuleSets :: [ModuleSet] -> ModuleSet
+unionManyModuleSets = coerce (Set.unions :: [Set NDModule] -> Set NDModule)
 
 unitModuleSet :: Module -> ModuleSet
 unitModuleSet = coerce Set.singleton

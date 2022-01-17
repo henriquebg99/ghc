@@ -58,7 +58,7 @@ module GHC.Tc.Utils.Monad(
   getRdrEnvs, getImports,
   getFixityEnv, extendFixityEnv, getRecFieldEnv,
   getDeclaredDefaultTys,
-  addDependentFiles, getMnwib,
+  addDependentFiles,
 
   -- * Error management
   getSrcSpanM, setSrcSpan, setSrcSpanA, addLocM, addLocMA, inGeneratedCode,
@@ -116,7 +116,7 @@ module GHC.Tc.Utils.Monad(
   emitNamedTypeHole, IsExtraConstraint(..), emitAnonTypeHole,
 
   -- * Template Haskell context
-  recordThUse, recordThSpliceUse,
+  recordThUse, recordThSpliceUse, recordThNeededRuntimeMods,
   keepAlive, getStage, getStageAndBindLevel, setStage,
   addModFinalizersWithLclEnv,
 
@@ -264,6 +264,7 @@ initTc hsc_env hsc_src keep_rn_syntax mod loc do_this
         th_state_var         <- newIORef Map.empty ;
         th_remote_state_var  <- newIORef Nothing ;
         th_docs_var          <- newIORef Map.empty ;
+        th_needed_mods_var   <- newIORef emptyModuleSet ;
         next_wrapper_num     <- newIORef emptyModuleEnv ;
         let {
              -- bangs to avoid leaking the env (#19356)
@@ -312,6 +313,7 @@ initTc hsc_env hsc_src keep_rn_syntax mod loc do_this
                 tcg_ann_env        = emptyAnnEnv,
                 tcg_th_used        = th_var,
                 tcg_th_splice_used = th_splice_var,
+                tcg_th_needed_mods = th_needed_mods_var,
                 tcg_exports        = [],
                 tcg_imports        = emptyImportAvails,
                 tcg_used_gres     = used_gre_var,
@@ -912,11 +914,6 @@ addDependentFiles fs = do
 getSrcSpanM :: TcRn SrcSpan
         -- Avoid clash with Name.getSrcLoc
 getSrcSpanM = do { env <- getLclEnv; return (RealSrcSpan (tcl_loc env) Strict.Nothing) }
-
-getMnwib :: TcRn ModuleNameWithIsBoot
-getMnwib = do
-  gbl_env <- getGblEnv
-  return $ GWIB (moduleName $ tcg_mod gbl_env) (hscSourceToIsBoot (tcg_src gbl_env))
 
 -- See Note [Error contexts in generated code]
 inGeneratedCode :: TcRn Bool
@@ -1971,6 +1968,10 @@ recordThUse = do { env <- getGblEnv; writeTcRef (tcg_th_used env) True }
 
 recordThSpliceUse :: TcM ()
 recordThSpliceUse = do { env <- getGblEnv; writeTcRef (tcg_th_splice_used env) True }
+
+recordThNeededRuntimeMods :: [Module] -> TcM ()
+recordThNeededRuntimeMods needed_mods
+  = do { env <- getGblEnv; updTcRef (tcg_th_needed_mods env) (`extendModuleSetList` needed_mods)}
 
 keepAlive :: Name -> TcRn ()     -- Record the name in the keep-alive set
 keepAlive name
