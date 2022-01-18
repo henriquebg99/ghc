@@ -1,7 +1,7 @@
 
 ==================== Tidy Core ====================
 Result size of Tidy Core
-  = {terms: 36, types: 15, coercions: 0, joins: 0/0}
+  = {terms: 32, types: 12, coercions: 0, joins: 0/0}
 
 -- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
 T3717.$trModule4 :: GHC.Prim.Addr#
@@ -39,21 +39,16 @@ T3717.$trModule :: GHC.Types.Module
 T3717.$trModule
   = GHC.Types.Module T3717.$trModule3 T3717.$trModule1
 
-Rec {
--- RHS size: {terms: 10, types: 2, coercions: 0, joins: 0/0}
-T3717.$wfoo [InlPrag=[2], Occ=LoopBreaker]
-  :: GHC.Prim.Int# -> GHC.Prim.Int#
-[GblId, Arity=1, Str=<1L>, Unf=OtherCon []]
-T3717.$wfoo
-  = \ (ww :: GHC.Prim.Int#) ->
-      case ww of ds {
-        __DEFAULT -> T3717.$wfoo (GHC.Prim.-# ds 1#);
-        0# -> 0#
-      }
-end Rec }
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+T3717.foo1 :: Int
+[GblId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 10}]
+T3717.foo1 = GHC.Types.I# 0#
 
--- RHS size: {terms: 10, types: 4, coercions: 0, joins: 0/0}
-foo [InlPrag=[2]] :: Int -> Int
+Rec {
+-- RHS size: {terms: 14, types: 4, coercions: 0, joins: 0/0}
+foo [Occ=LoopBreaker] :: Int -> Int
 [GblId,
  Arity=1,
  Str=<1P(1L)>,
@@ -61,17 +56,22 @@ foo [InlPrag=[2]] :: Int -> Int
  Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
          WorkFree=True, Expandable=True,
          Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=False)
-         Tmpl= \ (w [Occ=Once1!] :: Int) ->
-                 case w of { GHC.Types.I# ww1 [Occ=Once1] ->
-                 case T3717.$wfoo ww1 of ww2 [Occ=Once1] { __DEFAULT ->
-                 GHC.Types.I# ww2
+         Tmpl= \ (ds [Occ=Once1!] :: Int) ->
+                 case ds of { GHC.Types.I# ds1 [Occ=Once1!] ->
+                 case ds1 of ds2 [Occ=Once1] {
+                   __DEFAULT -> foo (GHC.Types.I# (GHC.Prim.-# ds2 1#));
+                   0# -> T3717.foo1
                  }
                  }}]
 foo
-  = \ (w :: Int) ->
-      case w of { GHC.Types.I# ww1 ->
-      case T3717.$wfoo ww1 of ww2 { __DEFAULT -> GHC.Types.I# ww2 }
+  = \ (ds :: Int) ->
+      case ds of { GHC.Types.I# ds1 ->
+      case ds1 of ds2 {
+        __DEFAULT -> foo (GHC.Types.I# (GHC.Prim.-# ds2 1#));
+        0# -> T3717.foo1
       }
+      }
+end Rec }
 
 
 

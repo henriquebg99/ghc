@@ -1,7 +1,7 @@
 
 ==================== Exitification transformation ====================
 Result size of Exitification transformation
-  = {terms: 50, types: 22, coercions: 0, joins: 2/2}
+  = {terms: 51, types: 22, coercions: 0, joins: 2/2}
 
 -- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
 lvl :: Int
@@ -10,7 +10,7 @@ lvl :: Int
          WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 10}]
 lvl = GHC.Types.I# 0#
 
--- RHS size: {terms: 32, types: 14, coercions: 0, joins: 2/2}
+-- RHS size: {terms: 33, types: 14, coercions: 0, joins: 2/2}
 small :: Int -> Int
 [LclIdX,
  Arity=1,
@@ -21,70 +21,82 @@ small :: Int -> Int
          Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=False)
          Tmpl= \ (x [Dmd=SP(SL)] :: Int) ->
                  joinrec {
-                   go [InlPrag=[2], Occ=T[2]] :: Int -> Int -> Int
+                   go [Occ=LoopBreakerT[2]] :: Int -> Int -> Int
                    [LclId[JoinId(2)],
                     Arity=2,
-                    Str=<SP(L)><SP(SL)>,
+                    Str=<1P(L)><1P(1L)> {atN->SP(L)},
+                    Cpr=1,
                     Unf=Unf{Src=InlineStable, TopLvl=False, Value=True, ConLike=True,
                             WorkFree=True, Expandable=True,
                             Guidance=ALWAYS_IF(arity=2,unsat_ok=True,boring_ok=False)
-                            Tmpl= \ (z [Occ=Once1!, Dmd=SP(L)] :: Int)
+                            Tmpl= \ (z [Occ=Once2!, Dmd=SP(L)] :: Int)
                                     (ds [Occ=Once1!, Dmd=SP(SL)] :: Int) ->
-                                    case z of { GHC.Types.I# ww [Occ=Once1] ->
-                                    case ds of { GHC.Types.I# ww [Occ=Once1, Dmd=SL] ->
-                                    jump $wgo ww ww
+                                    case ds of { GHC.Types.I# ds [Occ=Once1!, Dmd=SL] ->
+                                    case ds of ds {
+                                      __DEFAULT ->
+                                        case z of { GHC.Types.I# x [Occ=Once1] ->
+                                        jump go
+                                          (GHC.Types.I# (GHC.Prim.+# x ds))
+                                          (GHC.Types.I# (GHC.Prim.-# ds 1#))
+                                        };
+                                      0# -> GHC.Num.$fNumInt_$c* z x
                                     }
                                     }}]
-                   go (z [Occ=Once1!, Dmd=SP(L)] :: Int)
+                   go (z [Occ=Once2!, Dmd=SP(L)] :: Int)
                       (ds [Occ=Once1!, Dmd=SP(SL)] :: Int)
-                     = case z of { GHC.Types.I# ww [Occ=Once1] ->
-                       case ds of { GHC.Types.I# ww [Occ=Once1, Dmd=SL] ->
-                       jump $wgo ww ww
-                       }
-                       };
-                   $wgo [InlPrag=[2], Occ=LoopBreakerT[2]]
-                     :: GHC.Prim.Int# -> GHC.Prim.Int# -> Int
-                   [LclId[JoinId(2)],
-                    Arity=2,
-                    Str=<L><SL>,
-                    Unf=Unf{Src=<vanilla>, TopLvl=False, Value=True, ConLike=True,
-                            WorkFree=True, Expandable=True, Guidance=IF_ARGS [0 51] 69 10}]
-                   $wgo (ww [Occ=Once2] :: GHC.Prim.Int#)
-                        (ww [Occ=Once1!, Dmd=SL] :: GHC.Prim.Int#)
-                     = case ww of ds {
+                     = case ds of { GHC.Types.I# ds [Occ=Once1!, Dmd=SL] ->
+                       case ds of ds {
                          __DEFAULT ->
+                           case z of { GHC.Types.I# x [Occ=Once1] ->
                            jump go
-                             (GHC.Types.I# (GHC.Prim.+# ww ds))
-                             (GHC.Types.I# (GHC.Prim.-# ds 1#));
-                         0# ->
-                           case x of { GHC.Types.I# y [Occ=Once1] ->
-                           GHC.Types.I# (GHC.Prim.*# ww y)
-                           }
+                             (GHC.Types.I# (GHC.Prim.+# x ds))
+                             (GHC.Types.I# (GHC.Prim.-# ds 1#))
+                           };
+                         0# -> GHC.Num.$fNumInt_$c* z x
+                       }
                        }; } in
                  jump go lvl x}]
 small
   = \ (x [Dmd=SP(SL)] :: Int) ->
       join {
-        exit :: GHC.Prim.Int# -> Int
+        exit :: Int -> Int
         [LclId[JoinId(1)]]
-        exit (ww :: GHC.Prim.Int#)
-          = case x of { GHC.Types.I# y ->
-            GHC.Types.I# (GHC.Prim.*# ww y)
-            } } in
+        exit (z :: Int) = GHC.Num.$fNumInt_$c* z x } in
       joinrec {
-        $wgo [InlPrag=[2], Occ=LoopBreaker]
-          :: GHC.Prim.Int# -> GHC.Prim.Int# -> Int
+        go [Occ=LoopBreaker] :: Int -> Int -> Int
         [LclId[JoinId(2)],
          Arity=2,
-         Str=<L><SL>,
-         Unf=Unf{Src=<vanilla>, TopLvl=False, Value=True, ConLike=True,
-                 WorkFree=True, Expandable=True, Guidance=IF_ARGS [0 38] 49 10}]
-        $wgo (ww :: GHC.Prim.Int#) (ww [Dmd=SL] :: GHC.Prim.Int#)
-          = case ww of ds {
-              __DEFAULT -> jump $wgo (GHC.Prim.+# ww ds) (GHC.Prim.-# ds 1#);
-              0# -> jump exit ww
+         Str=<1P(L)><1P(1L)> {atN->SP(L)},
+         Cpr=1,
+         Unf=Unf{Src=InlineStable, TopLvl=False, Value=True, ConLike=True,
+                 WorkFree=True, Expandable=True,
+                 Guidance=ALWAYS_IF(arity=2,unsat_ok=True,boring_ok=False)
+                 Tmpl= \ (z [Occ=Once2!, Dmd=SP(L)] :: Int)
+                         (ds [Occ=Once1!, Dmd=SP(SL)] :: Int) ->
+                         case ds of { GHC.Types.I# ds [Occ=Once1!, Dmd=SL] ->
+                         case ds of ds {
+                           __DEFAULT ->
+                             case z of { GHC.Types.I# x [Occ=Once1] ->
+                             jump go
+                               (GHC.Types.I# (GHC.Prim.+# x ds))
+                               (GHC.Types.I# (GHC.Prim.-# ds 1#))
+                             };
+                           0# -> GHC.Num.$fNumInt_$c* z x
+                         }
+                         }}]
+        go (z [Dmd=SP(L)] :: Int) (ds [Dmd=SP(SL)] :: Int)
+          = case ds of { GHC.Types.I# ds [Dmd=SL] ->
+            case ds of ds {
+              __DEFAULT ->
+                case z of { GHC.Types.I# x ->
+                jump go
+                  (GHC.Types.I# (GHC.Prim.+# x ds))
+                  (GHC.Types.I# (GHC.Prim.-# ds 1#))
+                };
+              0# -> jump exit z
+            }
             }; } in
-      case x of { GHC.Types.I# ww [Dmd=SL] -> jump $wgo 0# ww }
+      jump go lvl x
 
 -- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
 $trModule :: GHC.Prim.Addr#
