@@ -1,8 +1,13 @@
 {-# LANGUAGE MultiWayIf #-}
 
+
+-- mutual recursion: Backend is in DynFlags, so can't include a
+-- function that depends on DynFlags, even just to extract something 
+-- from DynFlags
+
 -- | Code generation backends
 module GHC.Driver.Backend
-   ( Backend
+   ( Backend -- export LegacyBackend(..) with legacyBackendUnsafe
    , platformDefaultBackend
    , platformNcgSupported
    , backendProducesObject
@@ -13,6 +18,8 @@ module GHC.Driver.Backend
 
    , backendWantsLlvmCppMacros
    , backendWantsClangTools
+
+   , backendNeedsFullWays
 
    , ncgBackend
    , llvmBackend
@@ -29,6 +36,7 @@ module GHC.Driver.Backend
    , backendValidityOfCExportStatic
    , backendValidityOfCImport
 
+   , backendSupportsStopC
 
    , supportsHpc
    , needsPlatformNcgSupport
@@ -52,23 +60,41 @@ module GHC.Driver.Backend
 
    , backendSptIsDynamic
 
+   , backendInhibitsInterfaceWriting
+
    , backendIgnoresSpecialise
 
    , backendWantsInterfaceFile
 
    , backendNormalSuccessorPhase
+
+   , backendPipelineOutput
+
+   , backendPipeline, PipelineName(..)
+
    )
+
 where
 
 import GHC.Driver.Backend.Rep
-import GHC.Driver.Pipeline.Monad
 --import GHC.Driver.Phases
 import GHC.Prelude
 import GHC.Platform
 import GHC.Utils.Error
 import GHC.Utils.Outputable
+import GHC.Driver.Pipeline.Monad
 
 import GHC.Driver.Phases
+
+-- | We really hope to get rid of this, but...
+
+data PipelineName = ViaCPipeline | NCGPipeline | LLVMPipeline | NoPipeline
+
+backendPipeline :: Backend -> PipelineName
+backendPipeline ViaC = ViaCPipeline
+backendPipeline NCG = NCGPipeline
+backendPipeline LLVM = LLVMPipeline
+backendPipeline _ = NoPipeline
 
 backendUnregisterisedOnly :: Backend -> Bool
 
@@ -93,6 +119,13 @@ backendForcesOptimization0 :: Backend -> Bool
 backendForcesOptimization0 Interpreter = True
 backendForcesOptimization0 _ = False
 
+backendNeedsFullWays :: Backend -> Bool
+backendNeedsFullWays Interpreter = True
+backendNeedsFullWays _ = False
+
+backendSupportsStopC :: Backend -> Bool
+backendSupportsStopC ViaC = True
+backendSupportsStopC _ = False
 
 backendDescription :: Backend -> String
 -- ^ For use in issuing warning messages *only*.  If code depends
@@ -186,6 +219,10 @@ backendNeedn'tLink _ = False
 backendGeneratesCode :: Backend -> Bool
 backendGeneratesCode NoBackend = False
 backendGeneratesCode _ = True
+
+backendInhibitsInterfaceWriting :: Backend -> Bool
+backendInhibitsInterfaceWriting NoBackend = True
+backendInhibitsInterfaceWriting _ = False
 
 -- | Does this backend retain *all* top-level bindings for a module,
 -- rather than just the exported bindings, in the TypeEnv and compiled
@@ -283,6 +320,11 @@ backendWantsClangTools _ = False
 backendWantsLlvmCppMacros :: Backend -> Bool
 backendWantsLlvmCppMacros LLVM = True
 backendWantsLlvmCppMacros _ = False
+
+
+
+
+
 
 
 backendPipelineOutput :: Backend -> PipelineOutput
