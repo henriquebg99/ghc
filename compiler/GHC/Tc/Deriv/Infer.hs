@@ -384,7 +384,8 @@ inferConstraintsAnyclass
                       -- quantified in generic default type signatures.
                       -- See Note [Gathering and simplifying constraints for
                       -- DeriveAnyClass]
-                    ; (dm_subst, dm_metas) <- newMetaTyVarsX subst0 dm_tvs
+                      -- TODO RGS: Explain why pushTcLevelM_ is used
+                    ; (dm_subst, dm_metas) <- pushTcLevelM_ $ newMetaTyVarsX subst0 dm_tvs
                     ; let dm_inst_theta = substTheta dm_subst dm_theta
                           dm_inst_tau   = substTy dm_subst dm_tau
 
@@ -745,27 +746,15 @@ simplifyDeriv :: PredType -- ^ @C inst_ty@, head of the instance we are
               -> TcM ThetaType -- ^ Needed constraints (after simplification),
                                -- i.e. @['PredType']@.
 simplifyDeriv pred tvs thetas
-  = do { (skol_subst, tvs_skols) <- tcInstSkolTyVars tvs -- Skolemize
-                -- The constraint solving machinery
-                -- expects *TcTyVars* not TyVars.
-                -- We use *non-overlappable* (vanilla) skolems
-                -- See Note [Overlap and deriving]
-
-       ; let skol_set  = mkVarSet tvs_skols
+  = do { let skol_set  = mkVarSet tvs
              skol_info = DerivSkol pred
              doc = text "deriving" <+> parens (ppr pred)
-
-             mk_given_ev :: PredType -> TcM EvVar
-             mk_given_ev given =
-               let given_pred = substTy skol_subst given
-               in newEvVar given_pred
 
              emit_wanted_constraints :: [PredOrigin] -> TcM ()
              emit_wanted_constraints preds
                = do { -- Make a constraint for each of the instantiated predicates
                     ; let mk_wanted_ct (PredOrigin wanted orig t_or_k)
-                            = do { ev <- newWanted orig (Just t_or_k) $
-                                         substTyUnchecked skol_subst wanted
+                            = do { ev <- newWanted orig (Just t_or_k) wanted
                                  ; return (mkNonCanonical ev) }
                     ; cts <- mapM mk_wanted_ct preds
 
@@ -781,7 +770,7 @@ simplifyDeriv pred tvs thetas
              mk_wanteds (ThetaOrigin { to_anyclass_skols  = ac_skols
                                      , to_anyclass_givens = ac_givens
                                      , to_wanted_origins  = preds })
-               = do { ac_given_evs <- mapM mk_given_ev ac_givens
+               = do { ac_given_evs <- mapM newEvVar ac_givens
                     ; (_, wanteds)
                         <- captureConstraints $
                            checkConstraints skol_info ac_skols ac_given_evs $
@@ -794,7 +783,7 @@ simplifyDeriv pred tvs thetas
        -- See [STEP DAC BUILD]
        -- Generate the implication constraints, one for each method, to solve
        -- with the skolemized variables.  Start "one level down" because
-       -- we are going to wrap the result in an implication with tvs_skols,
+       -- we are going to wrap the result in an implication with tvs,
        -- in step [DAC RESIDUAL]
        ; (tc_lvl, wanteds) <- pushTcLevelM $
                               mapM mk_wanteds thetas
@@ -839,7 +828,7 @@ simplifyDeriv pred tvs thetas
                            where p = ctPred ct
 
        ; traceTc "simplifyDeriv outputs" $
-         vcat [ ppr tvs_skols, ppr residual_simple, ppr good ]
+         vcat [ ppr tvs, ppr residual_simple, ppr good ]
 
        -- Return the good unsolved constraints (unskolemizing on the way out.)
        ; let min_theta = mkMinimalBySCs id (bagToList good)
@@ -849,8 +838,6 @@ simplifyDeriv pred tvs thetas
              -- constraints.
              -- See Note [Gathering and simplifying constraints for
              --           DeriveAnyClass]
-             subst_skol = zipTvSubst tvs_skols $ mkTyVarTys tvs
-                          -- The reverse substitution (sigh)
 
        -- See [STEP DAC RESIDUAL]
        -- Ensure that min_theta is enough to solve /all/ the constraints in
@@ -859,7 +846,7 @@ simplifyDeriv pred tvs thetas
        --    forall tvs. min_theta => solved_wanteds
        ; min_theta_vars <- mapM newEvVar min_theta
        ; (leftover_implic, _)
-           <- buildImplicationFor tc_lvl skol_info tvs_skols
+           <- buildImplicationFor tc_lvl skol_info tvs
                                   min_theta_vars solved_wanteds
        -- This call to simplifyTop is purely for error reporting
        -- See Note [Error reporting for deriving clauses]
@@ -867,7 +854,7 @@ simplifyDeriv pred tvs thetas
        -- in this line of code.
        ; simplifyTopImplic leftover_implic
 
-       ; return (substTheta subst_skol min_theta) }
+       ; return min_theta }
 
 {-
 Note [Overlap and deriving]
@@ -897,6 +884,8 @@ BOTTOM LINE: use vanilla, non-overlappable skolems when inferring
 
 Note [Gathering and simplifying constraints for DeriveAnyClass]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+TODO RGS: Update this
+
 DeriveAnyClass works quite differently from stock and newtype deriving in
 the way it gathers and simplifies constraints to be used in a derived
 instance's context. Stock and newtype deriving gather constraints by looking
