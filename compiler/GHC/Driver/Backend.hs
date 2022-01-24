@@ -11,7 +11,7 @@ module GHC.Driver.Backend
    , platformDefaultBackend
    , platformNcgSupported
    , backendProducesObject
-   , backendNeedn'tLink
+   , backendNeedsLink
    , backendGeneratesCode
    , backendInterfaceHasCodegen
    , backendRetainsAllBindings
@@ -212,9 +212,9 @@ backendProducesObject LLVM        = True
 backendProducesObject Interpreter = False
 backendProducesObject NoBackend   = False
 
-backendNeedn'tLink :: Backend -> Bool
-backendNeedn'tLink NoBackend = True
-backendNeedn'tLink _ = False
+backendNeedsLink :: Backend -> Bool
+backendNeedsLink NoBackend = False
+backendNeedsLink _ = True
 
 backendGeneratesCode :: Backend -> Bool
 backendGeneratesCode NoBackend = False
