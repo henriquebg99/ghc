@@ -25,8 +25,8 @@ module GHC.Driver.Backend
    , interpreterBackend
    , noBackend
 
-   , useNcgPrimitives
-   , useLlvmPrimitives
+   , backendWantsNcgPrimitives
+   , backendWantsLlvmPrimitives
 
 
    , backendSupportsSwitch
@@ -156,13 +156,13 @@ viaCBackend = ViaC
 interpreterBackend = Interpreter
 noBackend = NoBackend
 
-useNcgPrimitives :: Backend -> Bool
-useNcgPrimitives NCG = True
-useNcgPrimitives _ = False
+backendWantsNcgPrimitives :: Backend -> Bool
+backendWantsNcgPrimitives NCG = True
+backendWantsNcgPrimitives _ = False
 
-useLlvmPrimitives :: Backend -> Bool
-useLlvmPrimitives LLVM = True
-useLlvmPrimitives _ = False
+backendWantsLlvmPrimitives :: Backend -> Bool
+backendWantsLlvmPrimitives LLVM = True
+backendWantsLlvmPrimitives _ = False
 
 -- these are checks for foreign declarations
 

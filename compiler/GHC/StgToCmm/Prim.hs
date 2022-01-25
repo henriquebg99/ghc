@@ -1769,8 +1769,8 @@ emitPrimOp dflags primop = case primop of
     [_, CmmLit (CmmInt n _) ] -> isJust (exactLog2 n)
     _                         -> False
 
-  ncg  = useNcgPrimitives $ backend dflags
-  llvm = useLlvmPrimitives $ backend dflags
+  ncg  = backendWantsNcgPrimitives $ backend dflags
+  llvm = backendWantsLlvmPrimitives $ backend dflags
   x86ish = case platformArch platform of
              ArchX86    -> True
              ArchX86_64 -> True
