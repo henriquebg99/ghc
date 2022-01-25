@@ -29,7 +29,7 @@ module GHC.Driver.Backend
    , backendWantsLlvmPrimitives
 
 
-   , backendSupportsSwitch
+   , backendHasNativeSwitch
 
    , backendValidityOfCExportStatic
    , backendValidityOfCImport
@@ -244,10 +244,10 @@ backendRetainsAllBindings LLVM        = False
 
 -- | Does the backend support switch out of the box? Then leave this to the
 -- backend!
-backendSupportsSwitch :: Backend -> Bool
-backendSupportsSwitch ViaC = True
-backendSupportsSwitch LLVM = True
-backendSupportsSwitch _    = False
+backendHasNativeSwitch :: Backend -> Bool
+backendHasNativeSwitch ViaC = True
+backendHasNativeSwitch LLVM = True
+backendHasNativeSwitch _    = False
 
 backendSplitsProcPoints :: Backend -> Bool
 backendSplitsProcPoints NCG = False

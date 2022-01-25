@@ -8,7 +8,7 @@ module GHC.Cmm.Switch (
      switchTargetsToList, eqSwitchTargetWith,
 
      SwitchPlan(..),
-     backendSupportsSwitch,
+     backendHasNativeSwitch,
      createSwitchPlan,
   ) where
 

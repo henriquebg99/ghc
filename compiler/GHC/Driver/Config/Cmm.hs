@@ -20,7 +20,7 @@ initCmmConfig dflags = CmmConfig
   , cmmOptSink             = gopt Opt_CmmSink             dflags
   , cmmGenStackUnwindInstr = debugLevel dflags > 0
   , cmmExternalDynamicRefs = gopt Opt_ExternalDynamicRefs dflags
-  , cmmDoCmmSwitchPlans    = not . backendSupportsSwitch . backend $ dflags
+  , cmmDoCmmSwitchPlans    = not . backendHasNativeSwitch . backend $ dflags
   , cmmSplitProcPoints     = backendSplitsProcPoints (backend dflags)
                              || not (platformTablesNextToCode platform)
                              || usingInconsistentPicReg
