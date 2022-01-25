@@ -36,8 +36,8 @@ module GHC.Driver.Backend
 
    , backendSupportsStopC
 
-   , supportsHpc
-   , needsPlatformNcgSupport
+   , backendSupportsHpc
+   , backendNeedsPlatformNcgSupport
 
    , backendUnregisterisedOnly
    , backendSwappableWithViaC
@@ -120,9 +120,9 @@ backendSwappableWithViaC LLVM = True
 backendSwappableWithViaC _ = False
 
 
-needsPlatformNcgSupport :: Backend -> Bool
-needsPlatformNcgSupport NCG = True
-needsPlatformNcgSupport _ = False
+backendNeedsPlatformNcgSupport :: Backend -> Bool
+backendNeedsPlatformNcgSupport NCG = True
+backendNeedsPlatformNcgSupport _ = False
 
 backendForcesOptimization0 :: Backend -> Bool
 backendForcesOptimization0 Interpreter = True
@@ -184,10 +184,12 @@ backendValidityOfCImport LLVM        = IsValid
 backendValidityOfCImport Interpreter = IsValid
 
 
-supportsHpc :: Backend -> Bool
-supportsHpc Interpreter = False
-supportsHpc _ = True
+backendSupportsHpc :: Backend -> Bool
+backendSupportsHpc Interpreter = False
+backendSupportsHpc _ = True
 
+
+--- these next two migrate to ...Backends.hs
 
 -- | Default backend to use for the given platform.
 platformDefaultBackend :: Platform -> Backend

@@ -4705,7 +4705,7 @@ makeDynFlagsConsistent dflags
          else
            pgmError "Compiling via C only supports unregisterised ABI but target platform doesn't use it."
 
- | gopt Opt_Hpc dflags && not (supportsHpc (backend dflags))
+ | gopt Opt_Hpc dflags && not (backendSupportsHpc (backend dflags))
     = let dflags' = gopt_unset dflags Opt_Hpc
           warn = "Hpc can't be used with " ++ backendDescription (backend dflags) ++
                  ". Ignoring -fhpc."
@@ -4716,7 +4716,7 @@ makeDynFlagsConsistent dflags
     = loop (dflags { backend = viaCBackend })
            "Target platform uses unregisterised ABI, so compiling via C"
 
- | needsPlatformNcgSupport (backend dflags) &&
+ | backendNeedsPlatformNcgSupport (backend dflags) &&
    not (platformNcgSupported $ targetPlatform dflags)
       = let dflags' = dflags { backend = llvmBackend }
             warn = "Native code generator doesn't support target platform, so using LLVM"
