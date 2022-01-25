@@ -139,10 +139,7 @@ test('T9872a',
      [''])
 
 test('T9872b',
-     [ only_ways(['normal']),
-       collect_compiler_stats('bytes allocated', 1),
-       high_memory_usage
-      ],
+     normal,
      compile_fail,
      [''])
 test('T9872c',
@@ -558,18 +555,3 @@ test ('T20261',
       [collect_compiler_stats('all')],
       compile,
       [''])
-
-test ('T15703',
-      [ collect_compiler_stats('bytes allocated',2) ],
-      multimod_compile,
-      ['T15703', '-v0 -O'])
-
-test ('T8095',
-      [ collect_compiler_stats('bytes allocated',2) ],
-      compile,
-      ['-v0 -O'])
-
-test ('T13386',
-      [ collect_compiler_stats('bytes allocated',2) ],
-      compile,
-      ['-v0 -O0'])
