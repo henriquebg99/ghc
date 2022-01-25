@@ -70,7 +70,6 @@ import Data.IORef
 import GHC.Types.Name.Env
 import GHC.Platform.Ways
 import GHC.Platform.ArchOS
-import GHC.CmmToLlvm.Base ( llvmVersionList )
 import {-# SOURCE #-} GHC.Driver.Pipeline (compileForeign, compileEmptyStub)
 import GHC.Settings
 import System.IO
@@ -521,7 +520,7 @@ runHscBackendPhase pipe_env hsc_env mod_name src_flavour location result = do
                 }
         -> if not (backendGeneratesCode (backend dflags)) then
              panic "HscRecomp not relevant for NoBackend"
-           else if backendInterfaceHasCodegen (backend dflags) then
+           else if backendWritesFiles (backend dflags) then
              do
               output_fn <- phaseOutputFilenameNew next_phase pipe_env hsc_env (Just location)
               (outputFilename, mStub, foreign_files, cg_infos) <-

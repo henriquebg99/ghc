@@ -10,10 +10,8 @@ module GHC.Driver.Backend
    ( Backend -- export LegacyBackend(..) with legacyBackendUnsafe
    , platformDefaultBackend
    , platformNcgSupported
-   , backendProducesObject
    , backendNeedsLink
    , backendGeneratesCode
-   , backendInterfaceHasCodegen
    , backendRetainsAllBindings
 
    , backendCDefs
@@ -60,11 +58,11 @@ module GHC.Driver.Backend
 
    , backendSptIsDynamic
 
-   , backendInhibitsInterfaceWriting
+   , backendSupportsInterfaceWriting
 
-   , backendIgnoresSpecialise
+   , backendRespectsSpecialise
 
-   , backendWantsInterfaceFile
+   , backendWritesFiles
 
    , backendNormalSuccessorPhase
 
@@ -215,14 +213,6 @@ platformNcgSupported platform = if
          ArchAArch64   -> True
          _             -> False
 
--- | Will this backend produce an object file on the disk?
-backendProducesObject :: Backend -> Bool
-backendProducesObject ViaC        = True
-backendProducesObject NCG         = True
-backendProducesObject LLVM        = True
-backendProducesObject Interpreter = False
-backendProducesObject NoBackend   = False
-
 backendNeedsLink :: Backend -> Bool
 backendNeedsLink NoBackend = False
 backendNeedsLink _ = True
@@ -231,9 +221,9 @@ backendGeneratesCode :: Backend -> Bool
 backendGeneratesCode NoBackend = False
 backendGeneratesCode _ = True
 
-backendInhibitsInterfaceWriting :: Backend -> Bool
-backendInhibitsInterfaceWriting NoBackend = True
-backendInhibitsInterfaceWriting _ = False
+backendSupportsInterfaceWriting :: Backend -> Bool
+backendSupportsInterfaceWriting NoBackend = False
+backendSupportsInterfaceWriting _ = True
 
 -- | Does this backend retain *all* top-level bindings for a module,
 -- rather than just the exported bindings, in the TypeEnv and compiled
@@ -297,21 +287,19 @@ backendSptIsDynamic :: Backend -> Bool
 backendSptIsDynamic Interpreter = True
 backendSptIsDynamic _ = False
 
-backendIgnoresSpecialise :: Backend -> Bool
-backendIgnoresSpecialise NoBackend = True
-backendIgnoresSpecialise Interpreter = True
-backendIgnoresSpecialise _ = False
+backendRespectsSpecialise :: Backend -> Bool
+backendRespectsSpecialise NoBackend = False
+backendRespectsSpecialise Interpreter = False
+backendRespectsSpecialise _ = True
+
+-- the back end generates code and writes files, including an interface file and object code
 
 
-backendWantsInterfaceFile :: Backend -> Bool
-backendWantsInterfaceFile Interpreter = False
-backendWantsInterfaceFile NoBackend = False
-backendWantsInterfaceFile _ = True
+backendWritesFiles :: Backend -> Bool
+backendWritesFiles Interpreter = False
+backendWritesFiles NoBackend = False
+backendWritesFiles _ = True
 
-backendInterfaceHasCodegen :: Backend -> Bool
-backendInterfaceHasCodegen Interpreter = False
-backendInterfaceHasCodegen NoBackend = False
-backendInterfaceHasCodegen _ = True
 
 -- might make more sense in GHC.Driver.Backend.Output
 backendNormalSuccessorPhase :: Backend -> Phase

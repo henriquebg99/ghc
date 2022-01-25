@@ -214,7 +214,7 @@ withBkpSession cid insts deps session_type do_this = do
                 -- Make sure to write interfaces when we are type-checking
                 -- indefinite packages.
                 TcSession
-                  | not (backendInhibitsInterfaceWriting $ backend dflags)
+                  | backendSupportsInterfaceWriting $ backend dflags
                   -> EnumSet.insert Opt_WriteInterface (generalFlags dflags)
                 _ -> generalFlags dflags
 

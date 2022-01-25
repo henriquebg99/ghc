@@ -4338,7 +4338,7 @@ addReexportedModule p =
 -- code are allowed (requests for other target types are ignored).
 setBackend :: Backend -> DynP ()
 setBackend l = upd $ \ dfs ->
-  if ghcLink dfs /= LinkBinary || backendProducesObject l
+  if ghcLink dfs /= LinkBinary || backendWritesFiles l
   then dfs{ backend = l }
   else dfs
 
@@ -4350,7 +4350,7 @@ setObjBackend :: Backend -> DynP ()
 setObjBackend l = updM set
   where
    set dflags
-     | backendProducesObject (backend dflags)
+     | backendWritesFiles (backend dflags)
        = return $ dflags { backend = l }
      | otherwise = return dflags
 
@@ -4739,7 +4739,7 @@ makeDynFlagsConsistent dflags
  | LinkInMemory <- ghcLink dflags
  , not (gopt Opt_ExternalInterpreter dflags)
  , hostIsProfiled
- , backendProducesObject (backend dflags)
+ , backendWritesFiles (backend dflags)
  , ways dflags `hasNotWay` WayProf
     = loop dflags{targetWays_ = addWay WayProf (targetWays_ dflags)}
          "Enabling -prof, because -fobject-code is enabled and GHCi is profiled"

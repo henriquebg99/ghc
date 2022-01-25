@@ -753,13 +753,13 @@ hscRecompStatus
         -- No need for a linkable, we're good to go
         _ | not (backendNeedsLink (backend lcl_dflags)) -> return (UpToDate, Nothing)
           -- Interpreter can use either already loaded bytecode or loaded object code
-          | not (backendProducesObject (backend lcl_dflags)) -> do
+          | not (backendWritesFiles (backend lcl_dflags)) -> do
               res <- liftIO $ checkByteCode old_linkable
               case res of
                 (_, Just{}) -> return res
                 _ -> liftIO $ checkObjects lcl_dflags old_linkable mod_summary
           -- Need object files for making object files
-          | backendProducesObject (backend lcl_dflags) -> liftIO $ checkObjects lcl_dflags old_linkable mod_summary
+          | backendWritesFiles (backend lcl_dflags) -> liftIO $ checkObjects lcl_dflags old_linkable mod_summary
           | otherwise -> pprPanic "hscRecompStatus" (text $ show $ backend lcl_dflags)
     let recomp_reqd = recomp_iface_reqd `mappend` recomp_obj_reqd
     -- save the interface that comes back from checkOldIface.
@@ -1001,7 +1001,7 @@ suffixes. The interface file name can be overloaded with "-ohi", except when
 hscMaybeWriteIface :: Logger -> DynFlags -> Bool -> ModIface -> Maybe Fingerprint -> ModLocation -> IO ()
 hscMaybeWriteIface logger dflags is_simple iface old_iface mod_location = do
     let force_write_interface = gopt Opt_WriteInterface dflags
-        write_interface = backendWantsInterfaceFile (backend dflags)
+        write_interface = backendWritesFiles (backend dflags)
 
         write_iface dflags' iface =
           let !iface_name = if dynamicNow dflags' then ml_dyn_hi_file mod_location else ml_hi_file mod_location
