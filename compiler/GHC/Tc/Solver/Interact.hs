@@ -933,36 +933,65 @@ Passing along the solved_dicts important for two reasons:
 
 Note [No Given/Given fundeps]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-We do not create constraints from Given/Given interactions via functional
-dependencies or type family injectivity annotations. (In this Note, both
-are called fundeps.) Firstly, these fundep constraints will never serve
-a purpose in accepting more programs: Given constraints do not contain
-metavariables that could be unified via exploring fundeps. They *could*
-be useful in discovering inaccessible code. However, the constraints will
-be Wanteds, and as such will stop compilation if they go unsolved. Maybe
-there is a clever way to get the right inaccessible code warnings, but the
-path forward is far from clear. #12466 has further commentary.
+We do not create constraints from:
+* Given/Given interactions via functional dependencies or type family
+  injectivity annotations.
+* Given/instance fundep interactions via functional dependencies or
+  type family injectivity annotations.
 
-We consider Given/instance fundep interactions the same as Given/Given
-interactions: these, too, are not explored.
+In this Note, all these interactions are called just "fundeps".
 
-Furthermore, here is a case where a Given/instance interaction is actively
-harmful (from dependent/should_compile/RaeJobTalk):
+We ingore such fundeps for several reasons:
 
-  type family a == b :: Bool
-  type family Not a = r | r -> a where
-    Not False = True
-    Not True  = False
+1. These fundeps will never serve a purpose in accepting more
+   programs: Given constraints do not contain metavariables that could
+   be unified via exploring fundeps. They *could* be useful in
+   discovering inaccessible code. However, the constraints will be
+   Wanteds, and as such will cause errors (not just warnings) if they
+   go unsolved. Maybe there is a clever way to get the right
+   inaccessible code warnings, but the path forward is far from
+   clear. #12466 has further commentary.
 
-  [G] Not (a == b) ~ True
+2. Furthermore, here is a case where a Given/instance interaction is actively
+   harmful (from dependent/should_compile/RaeJobTalk):
 
-Reacting this Given with the equations for Not produces
+       type family a == b :: Bool
+       type family Not a = r | r -> a where
+         Not False = True
+         Not True  = False
 
-  [W] a == b ~ False
+       [G] Not (a == b) ~ True
 
-which cannot be proved without evidence for the Given. In effect, because
-fundeps do not carry evidence, extracting them from Givens just doesn't make
-sense.
+   Reacting this Given with the equations for Not produces
+
+      [W] a == b ~ False
+
+   This is indeed a true consequence, and would make sense as a fresh Given.
+   But we don't have a way to produce evidence for fundeps, as a Wanted it
+   is /harmful/: we can't prove it, and so we'll report an error and reject
+   the program. (Previously fundeps gave rise to Deriveds, which
+   carried no evidence, so it didn't matter that they could not be proved.)
+
+3. #20922 showed a subtle different problem with Given/instance fundeps.
+      type family ZipCons (as :: [k]) (bssx :: [[k]]) = (r :: [[k]]) | r -> as bssx where
+        ZipCons (a ': as) (bs ': bss) = (a ': bs) ': ZipCons as bss
+        ...
+
+      tclevel = 4
+      [G] ZipCons is1 iss ~ (i : is2) : jss
+
+   (The tclevel=4 means that this Given is at level 4.)  The fundep tells us that
+   'iss' must be of form (is2 : beta[4]) where beta[4] is a fresh unification
+   variable; we don't know what type it stands for. So we would emit
+      [W] iss ~ is2 : beta
+
+   Again we can't prove that equality; and worse we'll rewrite iss to
+   (is2:beta) in deeply nested contraints inside this implication,
+   where beta is untouchable (under other equality constraints), leading
+   to other insoluble constraints.
+
+The bottom line: since we have no evidence for them, we should ignore Given/Given
+and Given/instance fundeps entirely.
 -}
 
 interactDict :: InertCans -> Ct -> TcS (StopOrContinue Ct)
