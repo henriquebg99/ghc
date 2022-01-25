@@ -4734,7 +4734,9 @@ makeDynFlagsConsistent dflags
  | backendForcesOptimization0 (backend dflags)
  , let (dflags', changed) = updOptLevelChanged 0 dflags
  , changed
-    = loop dflags' "Optimization flags conflict with --interactive; optimization flags ignored."
+    = loop dflags' ("Optimization flags conflict with the " ++
+                   backendDescription (backend dflags) ++
+                                          "; optimization flags ignored.")
 
  | LinkInMemory <- ghcLink dflags
  , not (gopt Opt_ExternalInterpreter dflags)

@@ -12,7 +12,7 @@ module GHC.Driver.Backend
    , platformNcgSupported
    , backendNeedsLink
    , backendGeneratesCode
-   , backendRetainsAllBindings
+   , backendWantsGlobalBindings
 
    , backendCDefs
    , backendWantsClangTools
@@ -44,7 +44,7 @@ module GHC.Driver.Backend
    , backendDescription
 
    , backendForcesOptimization0
-   , backendSplitsProcPoints
+   , backendSupportsUnsplitProcPoints
 
    , backendSpecialModuleSource
 
@@ -177,11 +177,11 @@ backendValidityOfCExportStatic _
 
 -- | Checking a supported backend is in use
 backendValidityOfCImport :: Backend -> Validity
-backendValidityOfCImport NoBackend   = IsValid
 backendValidityOfCImport ViaC        = IsValid
 backendValidityOfCImport NCG         = IsValid
 backendValidityOfCImport LLVM        = IsValid
 backendValidityOfCImport Interpreter = IsValid
+backendValidityOfCImport NoBackend = IsValid
 
 
 backendSupportsHpc :: Backend -> Bool
@@ -236,12 +236,12 @@ backendSupportsInterfaceWriting _ = True
 --
 -- When no backend is used we also do it, so that Haddock can get access to the
 -- GlobalRdrEnv for a module after typechecking it.
-backendRetainsAllBindings :: Backend -> Bool
-backendRetainsAllBindings Interpreter = True
-backendRetainsAllBindings NoBackend   = True
-backendRetainsAllBindings ViaC        = False
-backendRetainsAllBindings NCG         = False
-backendRetainsAllBindings LLVM        = False
+backendWantsGlobalBindings :: Backend -> Bool
+backendWantsGlobalBindings Interpreter = True
+backendWantsGlobalBindings NoBackend   = True
+backendWantsGlobalBindings ViaC        = False
+backendWantsGlobalBindings NCG         = False
+backendWantsGlobalBindings LLVM        = False
 
 
 -- | Does the backend support switch out of the box? Then leave this to the
@@ -251,9 +251,9 @@ backendHasNativeSwitch ViaC = True
 backendHasNativeSwitch LLVM = True
 backendHasNativeSwitch _    = False
 
-backendSplitsProcPoints :: Backend -> Bool
-backendSplitsProcPoints NCG = False
-backendSplitsProcPoints _   = True
+backendSupportsUnsplitProcPoints :: Backend -> Bool
+backendSupportsUnsplitProcPoints NCG = True
+backendSupportsUnsplitProcPoints _   = False
 
 -- | Used to help characterize the source of code in GHC.Unit.Module.Graph.
 -- The Boolean is a "recomp" flag...

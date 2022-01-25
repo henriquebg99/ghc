@@ -21,7 +21,7 @@ initCmmConfig dflags = CmmConfig
   , cmmGenStackUnwindInstr = debugLevel dflags > 0
   , cmmExternalDynamicRefs = gopt Opt_ExternalDynamicRefs dflags
   , cmmDoCmmSwitchPlans    = not . backendHasNativeSwitch . backend $ dflags
-  , cmmSplitProcPoints     = backendSplitsProcPoints (backend dflags)
+  , cmmSplitProcPoints     = not (backendSupportsUnsplitProcPoints (backend dflags))
                              || not (platformTablesNextToCode platform)
                              || usingInconsistentPicReg
   }
