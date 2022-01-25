@@ -1011,7 +1011,7 @@ doCpp logger tmpfs dflags unit_env raw input_fn output_fn = do
           [ "-D__AVX512F__"  | isAvx512fEnabled  dflags ] ++
           [ "-D__AVX512PF__" | isAvx512pfEnabled dflags ]
 
-    backend_defs <- getBackendDefs logger dflags
+    backend_defs <- backendCDefs (backend dflags) logger (pgm_lc dflags)
 
     let th_defs = [ "-D__GLASGOW_HASKELL_TH__" ]
     -- Default CPP defines in Haskell source
@@ -1063,20 +1063,6 @@ doCpp logger tmpfs dflags unit_env raw input_fn output_fn = do
                        , GHC.SysTools.FileOption "" output_fn
                        ])
 
-getBackendDefs :: Logger -> DynFlags -> IO [String]
-getBackendDefs logger dflags | backendWantsLlvmCppMacros (backend dflags) = do
-    llvmVer <- figureLlvmVersion logger dflags
-    return $ case fmap llvmVersionList llvmVer of
-               Just [m] -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,0) ]
-               Just (m:n:_) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
-               _ -> []
-  where
-    format (major, minor)
-      | minor >= 100 = error "getBackendDefs: Unsupported minor version"
-      | otherwise = show $ (100 * major + minor :: Int) -- Contract is Int
-
-getBackendDefs _ _ =
-    return []
 
 -- | What phase to run after one of the backend code generators has run
 hscPostBackendPhase :: HscSource -> Backend -> Phase

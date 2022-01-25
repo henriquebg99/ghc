@@ -10,11 +10,7 @@ import GHC.Platform
 
 import GHC.Utils.Outputable
 import GHC.Driver.Session
-
-import qualified Data.List.NonEmpty as NE
-
-newtype LlvmVersion = LlvmVersion { llvmVersionNE :: NE.NonEmpty Int }
-  deriving (Eq, Ord)
+import GHC.Driver.Backend(LlvmVersion(..))
 
 data LlvmCgConfig = LlvmCgConfig
   { llvmCgPlatform          :: !Platform     -- ^ Target platform

@@ -16,7 +16,7 @@ module GHC.Driver.Backend
    , backendInterfaceHasCodegen
    , backendRetainsAllBindings
 
-   , backendWantsLlvmCppMacros
+   , backendCDefs
    , backendWantsClangTools
 
    , backendNeedsFullWays
@@ -72,19 +72,30 @@ module GHC.Driver.Backend
 
    , backendPipeline, PipelineName(..)
 
+   , LlvmVersion(..)
+
    )
 
 where
 
 import GHC.Driver.Backend.Rep
 --import GHC.Driver.Phases
+import GHC.IO.Handle
+--import GHC.IO.Handle.Text
 import GHC.Prelude
 import GHC.Platform
+import GHC.CmmToLlvm.LlvmVersion
 import GHC.Utils.Error
+import GHC.Utils.Exception
+import GHC.Utils.Logger
+import GHC.Utils.Misc
 import GHC.Utils.Outputable
 import GHC.Driver.Pipeline.Monad
+import GHC.Utils.CliOption
 
 import GHC.Driver.Phases
+
+import System.Process
 
 -- | We really hope to get rid of this, but...
 
@@ -314,21 +325,61 @@ backendWantsClangTools :: Backend -> Bool
 backendWantsClangTools LLVM = True
 backendWantsClangTools _ = False
 
--- I really wanted `backendCppMacros :: Backend -> IO [String]`,
--- but the code depends on `DynFlags` so it couldn't go in this module,
--- and I didn't think it was worth creating another module.
-backendWantsLlvmCppMacros :: Backend -> Bool
-backendWantsLlvmCppMacros LLVM = True
-backendWantsLlvmCppMacros _ = False
-
-
-
-
-
-
-
 backendPipelineOutput :: Backend -> PipelineOutput
 backendPipelineOutput Interpreter = NoOutputFile
 backendPipelineOutput NoBackend = NoOutputFile
 backendPipelineOutput _ = Persistent
+
+backendCDefs :: Backend -> Logger -> (String, [Option]) -> IO [String]
+backendCDefs LLVM logger lc = do
+    llvmVer <- figureLlvmVersion logger lc
+    return $ case fmap llvmVersionList llvmVer of
+               Just [m] -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,0) ]
+               Just (m:n:_) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
+               _ -> []
+  where
+    format (major, minor)
+      | minor >= 100 = error "backendCDefs: Unsupported minor version"
+      | otherwise = show $ (100 * major + minor :: Int) -- Contract is Int
+backendCDefs _ _ _ = return []
+
+figureLlvmVersion :: Logger -> (String, [Option]) -> IO (Maybe LlvmVersion)
+figureLlvmVersion logger (pgm, opts) = traceSystoolCommand logger "llc" $ do
+  let args = filter notNull (map showOpt opts)
+      -- we grab the args even though they should be useless just in
+      -- case the user is using a customised 'llc' that requires some
+      -- of the options they've specified. llc doesn't care what other
+      -- options are specified when '-version' is used.
+      args' = args ++ ["-version"]
+  catchIO (do
+              (pin, pout, perr, p) <- runInteractiveProcess pgm args'
+                                              Nothing Nothing
+              {- > llc -version
+                  LLVM (http://llvm.org/):
+                    LLVM version 3.5.2
+                    ...
+              -}
+              hSetBinaryMode pout False
+              _     <- hGetLine pout
+              vline <- hGetLine pout
+              let mb_ver = parseLlvmVersion vline
+              hClose pin
+              hClose pout
+              hClose perr
+              _ <- waitForProcess p
+              return mb_ver
+            )
+            (\err -> do
+                debugTraceMsg logger 2
+                    (text "Error (figuring out LLVM version):" <+>
+                      text (show err))
+                errorMsg logger $ vcat
+                    [ text "Warning:", nest 9 $
+                          text "Couldn't figure out LLVM version!" $$
+                          text ("Make sure you have installed LLVM between ["
+                                ++ llvmVersionStr supportedLlvmVersionLowerBound
+                                ++ " and "
+                                ++ llvmVersionStr supportedLlvmVersionUpperBound
+                                ++ ")") ]
+                return Nothing)
 

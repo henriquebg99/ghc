@@ -286,6 +286,7 @@ Library
         GHC.CmmToLlvm.Mangler
         GHC.CmmToLlvm.Ppr
         GHC.CmmToLlvm.Regs
+        GHC.CmmToLlvm.LlvmVersion
         GHC.Cmm.Type
         GHC.Cmm.Utils
         GHC.Core
