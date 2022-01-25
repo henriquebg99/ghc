@@ -40,8 +40,7 @@ module GHC.Driver.Backend
    , needsPlatformNcgSupport
 
    , backendUnregisterisedOnly
-   , canReplaceViaC
-   , canBeReplacedByViaC
+   , backendSwappableWithViaC
    , backendDescription
 
    , backendForcesOptimization0
@@ -110,15 +109,16 @@ backendUnregisterisedOnly :: Backend -> Bool
 backendUnregisterisedOnly ViaC = True
 backendUnregisterisedOnly _ = False
 
-canReplaceViaC :: Backend -> Bool
-canReplaceViaC NCG = True
-canReplaceViaC LLVM = True
-canReplaceViaC _ = False
+-- | When the target platform supports *only* an unregisterised API,
+-- this backend can be replaced with compilation via C.  Or when the
+-- target does *not* support an unregisterised API, this back end can
+-- replace compilation via C.
 
-canBeReplacedByViaC :: Backend -> Bool
-canBeReplacedByViaC NCG = True
-canBeReplacedByViaC LLVM = True
-canBeReplacedByViaC _ = False
+backendSwappableWithViaC :: Backend -> Bool
+backendSwappableWithViaC NCG = True
+backendSwappableWithViaC LLVM = True
+backendSwappableWithViaC _ = False
+
 
 needsPlatformNcgSupport :: Backend -> Bool
 needsPlatformNcgSupport NCG = True

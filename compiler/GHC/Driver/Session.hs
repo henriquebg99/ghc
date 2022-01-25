@@ -4698,7 +4698,7 @@ makeDynFlagsConsistent dflags
  | backendUnregisterisedOnly (backend dflags) &&
    not (platformUnregisterised (targetPlatform dflags))
     = let b = platformDefaultBackend (targetPlatform dflags)
-      in if canReplaceViaC b then
+      in if backendSwappableWithViaC b then
            let dflags' = dflags { backend = b }
                warn = "Target platform doesn't use unregisterised ABI, so using " ++ backendDescription b ++ " rather than compiling via C"
            in loop dflags' warn
@@ -4711,7 +4711,7 @@ makeDynFlagsConsistent dflags
                  ". Ignoring -fhpc."
       in loop dflags' warn
 
- | canBeReplacedByViaC (backend dflags) &&
+ | backendSwappableWithViaC (backend dflags) &&
    platformUnregisterised (targetPlatform dflags)
     = loop (dflags { backend = viaCBackend })
            "Target platform uses unregisterised ABI, so compiling via C"
