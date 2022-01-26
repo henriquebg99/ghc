@@ -4695,15 +4695,18 @@ makeDynFlagsConsistent dflags
 
    -- Via-C backend only supports unregisterised ABI. Switch to a backend
    -- supporting it if possible.
- | backendUnregisterisedOnly (backend dflags) &&
+ | backendUnregisterisedAbiOnly (backend dflags) &&
    not (platformUnregisterised (targetPlatform dflags))
     = let b = platformDefaultBackend (targetPlatform dflags)
       in if backendSwappableWithViaC b then
            let dflags' = dflags { backend = b }
-               warn = "Target platform doesn't use unregisterised ABI, so using " ++ backendDescription b ++ " rather than compiling via C"
+               warn = "Target platform doesn't use unregisterised ABI, so using " ++
+                      backendDescription b ++ " rather than " ++
+                      backendDescription (backend dflags)
            in loop dflags' warn
          else
-           pgmError "Compiling via C only supports unregisterised ABI but target platform doesn't use it."
+           pgmError (backendDescription (backend dflags) ++
+                     " supports only unregisterised ABI but target platform doesn't use it.")
 
  | gopt Opt_Hpc dflags && not (backendSupportsHpc (backend dflags))
     = let dflags' = gopt_unset dflags Opt_Hpc

@@ -366,7 +366,7 @@ checkOptions mode dflags srcs objs units = do
         else do
 
    case mode of
-      StopBefore StopC | not (backendSupportsStopC (backend dflags))
+      StopBefore StopC | not (backendGeneratesHc (backend dflags))
         -> throwGhcException $ UsageError $
            "the option -C is only available with an unregisterised GHC"
       StopBefore StopAs | ghcLink dflags == NoLink

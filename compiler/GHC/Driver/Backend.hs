@@ -8,9 +8,9 @@
 -- | Code generation backends
 module GHC.Driver.Backend
    ( Backend -- export LegacyBackend(..) with legacyBackendUnsafe
+   , PrimitiveImplementation(..)
    , platformDefaultBackend
    , platformNcgSupported
-   , backendNeedsLink
    , backendGeneratesCode
    , backendWantsGlobalBindings
 
@@ -25,21 +25,19 @@ module GHC.Driver.Backend
    , interpreterBackend
    , noBackend
 
-   , backendWantsNcgPrimitives
-   , backendWantsLlvmPrimitives
-
+   , backendPrimitiveImplementation
 
    , backendHasNativeSwitch
 
-   , backendValidityOfCExportStatic
+   , backendValidityOfCExport
    , backendValidityOfCImport
 
-   , backendSupportsStopC
+   , backendGeneratesHc
 
    , backendSupportsHpc
    , backendNeedsPlatformNcgSupport
 
-   , backendUnregisterisedOnly
+   , backendUnregisterisedAbiOnly
    , backendSwappableWithViaC
    , backendDescription
 
@@ -52,8 +50,7 @@ module GHC.Driver.Backend
 
    , backendSupportsEmbeddedBlobs
 
-   , backendSupportsSimd
-   , backendNoSimdMessage
+   , backendSimdValidity
 
    , backendSptIsDynamic
 
@@ -98,16 +95,24 @@ import System.Process
 
 data PipelineName = ViaCPipeline | NCGPipeline | LLVMPipeline | NoPipeline
 
+
+
+data PrimitiveImplementation
+    = LlvmPrimitives
+    | NcgPrimitives
+    | GenericPrimitives
+
+
 backendPipeline :: Backend -> PipelineName
 backendPipeline ViaC = ViaCPipeline
 backendPipeline NCG = NCGPipeline
 backendPipeline LLVM = LLVMPipeline
 backendPipeline _ = NoPipeline
 
-backendUnregisterisedOnly :: Backend -> Bool
+backendUnregisterisedAbiOnly :: Backend -> Bool
 
-backendUnregisterisedOnly ViaC = True
-backendUnregisterisedOnly _ = False
+backendUnregisterisedAbiOnly ViaC = True
+backendUnregisterisedAbiOnly _ = False
 
 -- | When the target platform supports *only* an unregisterised API,
 -- this backend can be replaced with compilation via C.  Or when the
@@ -132,9 +137,9 @@ backendNeedsFullWays :: Backend -> Bool
 backendNeedsFullWays Interpreter = True
 backendNeedsFullWays _ = False
 
-backendSupportsStopC :: Backend -> Bool
-backendSupportsStopC ViaC = True
-backendSupportsStopC _ = False
+backendGeneratesHc :: Backend -> Bool
+backendGeneratesHc ViaC = True
+backendGeneratesHc _ = False
 
 backendDescription :: Backend -> String
 -- ^ For use in issuing warning messages *only*.  If code depends
@@ -156,23 +161,20 @@ viaCBackend = ViaC
 interpreterBackend = Interpreter
 noBackend = NoBackend
 
-backendWantsNcgPrimitives :: Backend -> Bool
-backendWantsNcgPrimitives NCG = True
-backendWantsNcgPrimitives _ = False
-
-backendWantsLlvmPrimitives :: Backend -> Bool
-backendWantsLlvmPrimitives LLVM = True
-backendWantsLlvmPrimitives _ = False
+backendPrimitiveImplementation :: Backend -> PrimitiveImplementation
+backendPrimitiveImplementation NCG = NcgPrimitives
+backendPrimitiveImplementation LLVM = LlvmPrimitives
+backendPrimitiveImplementation _ = GenericPrimitives
 
 -- these are checks for foreign declarations
 
 -- N.B. If there is no back end, all imports and exports are considered valid.
-backendValidityOfCExportStatic :: Backend -> Validity
-backendValidityOfCExportStatic NoBackend = IsValid
-backendValidityOfCExportStatic ViaC = IsValid
-backendValidityOfCExportStatic NCG  = IsValid
-backendValidityOfCExportStatic LLVM = IsValid
-backendValidityOfCExportStatic _
+backendValidityOfCExport :: Backend -> Validity
+backendValidityOfCExport NoBackend = IsValid
+backendValidityOfCExport ViaC = IsValid
+backendValidityOfCExport NCG  = IsValid
+backendValidityOfCExport LLVM = IsValid
+backendValidityOfCExport _
   = NotValid (text "requires unregisterised, llvm (-fllvm) or native code generation (-fasm)")
 
 -- | Checking a supported backend is in use
@@ -214,10 +216,6 @@ platformNcgSupported platform = if
          ArchSPARC     -> True
          ArchAArch64   -> True
          _             -> False
-
-backendNeedsLink :: Backend -> Bool
-backendNeedsLink NoBackend = False
-backendNeedsLink _ = True
 
 backendGeneratesCode :: Backend -> Bool
 backendGeneratesCode NoBackend = False
@@ -267,14 +265,12 @@ backendWantsBreakpointTicks Interpreter = True
 backendWantsBreakpointTicks _ = False
 
 
-backendSupportsSimd :: Backend -> Bool
-backendSupportsSimd LLVM = True
-backendSupportsSimd _ = False
+backendSimdValidity :: Backend -> Validity' String
+backendSimdValidity LLVM = IsValid
+backendSimdValidity _ =
+    NotValid $ unlines [ "SIMD vector instructions require the LLVM back-end."
+                       , "Please use -fllvm."]
 
-backendNoSimdMessage :: String
-backendNoSimdMessage =
-  unlines [ "SIMD vector instructions require the LLVM back-end."
-          , "Please use -fllvm."]
 
 -- See Note [Embedding large binary blobs] in GHC.CmmToAsm.Ppr
 

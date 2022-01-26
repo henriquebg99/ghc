@@ -751,7 +751,7 @@ hscRecompStatus
     (recomp_obj_reqd, mb_linkable) <-
       case () of
         -- No need for a linkable, we're good to go
-        _ | not (backendNeedsLink (backend lcl_dflags)) -> return (UpToDate, Nothing)
+        _ | not (backendGeneratesCode (backend lcl_dflags)) -> return (UpToDate, Nothing)
           -- Interpreter can use either already loaded bytecode or loaded object code
           | not (backendWritesFiles (backend lcl_dflags)) -> do
               res <- liftIO $ checkByteCode old_linkable

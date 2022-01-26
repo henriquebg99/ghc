@@ -421,7 +421,7 @@ tcFExport d = pprPanic "tcFExport" (ppr d)
 
 tcCheckFEType :: Type -> ForeignExport -> TcM ForeignExport
 tcCheckFEType sig_ty (CExport (L l (CExportStatic esrc str cconv)) src) = do
-    checkCg backendValidityOfCExportStatic
+    checkCg backendValidityOfCExport
     checkTc (isCLabelString str) (badCName str)
     cconv' <- checkCConv cconv
     checkForeignArgs isFFIExternalTy arg_tys

@@ -44,6 +44,7 @@ import GHC.Cmm.Utils
 import GHC.Builtin.PrimOps
 import GHC.Runtime.Heap.Layout
 import GHC.Data.FastString
+import GHC.Utils.Error
 import GHC.Utils.Misc
 import GHC.Utils.Panic
 import GHC.Utils.Panic.Plain
@@ -1769,8 +1770,10 @@ emitPrimOp dflags primop = case primop of
     [_, CmmLit (CmmInt n _) ] -> isJust (exactLog2 n)
     _                         -> False
 
-  ncg  = backendWantsNcgPrimitives $ backend dflags
-  llvm = backendWantsLlvmPrimitives $ backend dflags
+  (ncg, llvm) = case backendPrimitiveImplementation (backend dflags) of
+                  LlvmPrimitives -> (False, True)
+                  NcgPrimitives -> (True, False)
+                  GenericPrimitives -> (False, False)
   x86ish = case platformArch platform of
              ArchX86    -> True
              ArchX86_64 -> True
@@ -2339,8 +2342,9 @@ vecElemProjectCast _        _        _   =  Nothing
 
 checkVecCompatibility :: DynFlags -> PrimOpVecCat -> Length -> Width -> FCode ()
 checkVecCompatibility dflags vcat l w = do
-    unless (backendSupportsSimd (backend dflags)) $
-        sorry backendNoSimdMessage
+    case backendSimdValidity (backend dflags) of
+      IsValid -> return ()
+      NotValid msg -> sorry msg
     check vecWidth vcat l w
   where
     platform = targetPlatform dflags
