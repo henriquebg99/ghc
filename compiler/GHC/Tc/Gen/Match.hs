@@ -96,7 +96,7 @@ same number of arguments before using @tcMatches@ to do the work.
 
 tcMatchesFun :: LocatedN Id -- MatchContext Id
              -> MatchGroup GhcRn (LHsExpr GhcRn)
-             -> ExpRhoType      -- Expected type of function
+             -> ExpSigmaType      -- Expected type of function
              -> TcM (HsWrapper, MatchGroup GhcTc (LHsExpr GhcTc))
                                 -- Returns type of body
 tcMatchesFun fun_id matches exp_ty

@@ -319,7 +319,7 @@ matchExpectedFunTys :: forall a.
 --   where [t1, ..., tn], ty_r are passed to the thing_inside
 matchExpectedFunTys herald ctx lmatchpats orig_ty thing_inside
   = case orig_ty of
-      Check ty -> go [] lmatchpats ty
+      Check ty -> traceTc "matchExpectedFunTys: current ty is" (ppr ty) >> go [] lmatchpats ty
       _        -> defer [] lmatchpats orig_ty
   where
     go bndrs matchpats@(_:pats) ty
@@ -368,8 +368,9 @@ matchExpectedFunTys herald ctx lmatchpats orig_ty thing_inside
 -}
     go vars pats ty
       | (tvs, theta, _) <- tcSplitSigmaTy ty
-      , not (null theta && null tvs)
-      = do { (wrap_gen, (wrap_res, result)) <- tcSkolemiseScoped ctx ty $ \ty' ->
+      , not (null theta)
+      = do { traceTc "tcSkolemise: current ty" (ppr ty)
+           ; (wrap_gen, (wrap_res, result)) <- tcSkolemiseScoped ctx ty $ \ty' ->
                                                       go vars pats ty'
            ; return (wrap_gen <.> wrap_res, result) }
 
