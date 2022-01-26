@@ -16,7 +16,6 @@ import GHC.Utils.Monad.State.Strict
 import Control.Monad
 
 import GHC.Prelude
-import GHC.Utils.Outputable as Outputable
 import GHC.Driver.Session
 import GHC.Types.CostCentre
 import GHC.Types.CostCentre.State
@@ -29,7 +28,6 @@ import GHC.Data.FastString
 import GHC.Core
 import GHC.Core.Opt.Monad
 import GHC.Types.Id
-import GHC.Core.Utils hiding (mkTick)
 import GHC.Core.Utils (mkTick)
 
 addLateCostCentres :: ModGuts -> CoreM ModGuts
