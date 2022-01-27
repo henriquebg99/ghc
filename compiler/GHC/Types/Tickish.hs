@@ -336,9 +336,8 @@ data TickishPlacement =
     -- common that they want to track runtime processes. The only
     -- legal placement rule for counting ticks.
     -- NB: We generally try to move these as close to the relevant
-    -- runtime expression as possible. E.g. we create `(tick f) @Bool`
-    -- instead of `tick (f @Bool)` and some places in the compiler might
-    -- expect such a placement.
+    -- runtime expression as possible. This means they get pushed through
+    -- tyoe arguments. E.g. we create `(tick f) @Bool` instead of `tick (f @Bool)`.
     PlaceRuntime
 
     -- | As @PlaceRuntime@, but we float the tick through all

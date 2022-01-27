@@ -45,7 +45,6 @@ module GHC.Core (
         collectBinders, collectTyBinders, collectTyAndValBinders,
         collectNBinders,
         collectArgs, stripNArgs, collectArgsTicks, flattenBinds,
-        wrapLamBody,
 
         exprToType, exprToCoercion_maybe,
         applyTypeToArg, wrapLamBody,

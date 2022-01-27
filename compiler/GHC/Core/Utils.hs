@@ -374,9 +374,8 @@ mkTick t orig_expr = mkTick' id id orig_expr
       -> top $ Tick (mkNoScope t) $ rest $ Lam x $ mkTick (mkNoCount t) e
 
     App f arg
-      -- See Note [Float runtime ticks through type applications]
-      -- -- Always float through type applications.
-      | not (isRuntimeArg arg) -- && tickishPlace t /= PlaceRuntime
+      -- Always float through type applications.
+      | not (isRuntimeArg arg)
       -> mkTick' (top . flip App arg) rest f
 
       -- We can also float through constructor applications, placement

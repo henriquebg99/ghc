@@ -79,14 +79,11 @@ doBndr env bndr rhs = do
         name_loc = nameSrcSpan name
         cc_name = getOccFS name
         count = gopt Opt_ProfCountEntries (dflags env)
-        -- arity = exprArity rhs
-        rhs' = rhs -- etaExpand arity rhs
     cc_flavour <- (getCCExprFlavour cc_name) -- (ccState env)
     let cc_mod = thisModule env
         bndrCC = NormalCC cc_flavour cc_name cc_mod name_loc
         note = ProfNote bndrCC count True
-    -- return $ mkTick note rhs'
-    return rhs
+    return $ mkTick note rhs
 
 type M = State CostCentreState
 
