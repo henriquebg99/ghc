@@ -1395,7 +1395,8 @@ system.
 loadPackage :: Interp -> HscEnv -> UnitInfo -> IO ([LibrarySpec], [LibrarySpec])
 loadPackage _      hsc_env pkg
   -- See Note [Loader Consistency Checks]
-  | Just linked_abi_hash <- M.lookup (unitId pkg) (hsc_linked_abi_hashes hsc_env)
+  | not (gopt Opt_DisableLoaderIntegrityCheck dflags)
+  , Just linked_abi_hash <- M.lookup (unitId pkg) (hsc_linked_abi_hashes hsc_env)
   , linked_abi_hash /= unitAbiHash pkg
   , let msg = text "Attempting to load dependency" <+> text (unitPackageNameString pkg) -- <+> text "due to" <+> doc
            $$ text "with ABI hash" <+> quotes (text (ST.unpack $ unitAbiHash pkg))

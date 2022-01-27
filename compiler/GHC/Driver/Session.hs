@@ -3441,7 +3441,8 @@ fFlagsDeps = [
   flagSpec "show-loaded-modules"              Opt_ShowLoadedModules,
   flagSpec "whole-archive-hs-libs"            Opt_WholeArchiveHsLibs,
   flagSpec "keep-cafs"                        Opt_KeepCAFs,
-  flagSpec "link-rts"                         Opt_LinkRts
+  flagSpec "link-rts"                         Opt_LinkRts,
+  flagSpec "disable-strict-loader-integrity-check" Opt_DisableLoaderIntegrityCheck
   ]
   ++ fHoleFlags
 
@@ -4416,6 +4417,7 @@ parseEnvFile envfile = mapM_ parseEntry . lines
         where envdir = takeDirectory envfile
               db     = drop 11 str
       ["clear-package-db"]  -> clearPkgDb
+      ["hide-package", pkg]  -> hidePackage pkg
       ["global-package-db"] -> addPkgDbRef GlobalPkgDb
       ["user-package-db"]   -> addPkgDbRef UserPkgDb
       ["package-id", pkgid] -> exposePackageId pkgid
