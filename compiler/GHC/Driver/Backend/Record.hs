@@ -58,7 +58,8 @@ Notes:
 
 -- | A `Backend` contains functions that expect `DynFlags`, but `DynFlags`
 -- include a field of type `Backend`.  This impasse is resolved elsewhere
--- by the equation `Backend = Backend' DynFlags`.
+-- by the equation `type Backend = Backend' DynFlags`.  This equation
+-- appears in the module that defines `DynFlags`.
 --
 -- If you need to define a `Backend`, start with the `prototypeBackend` in
 -- module `GHC.Driver.Backends`.
@@ -279,13 +280,14 @@ data Backend' dflags =
                                      -> FilePath
                                      -> m (Maybe FilePath)
 
-            -- | In some of the compiler pipelines(?), when compiling
+            -- | Somewhere in the compiler driver, when compiling
             -- Haskell source (as opposed to a boot file or a sig
-            -- file, What phase to run after one of the backend code
-            -- generators has run.
+            -- file, it needs to know what to do with the code that
+            -- the `backendCodeOutput` writes to a file.  The `Phase`
+            -- value gives instructions like "run the C compiler",
+            -- "run the assembler," or "run the LLVM Optimizer."
 
             , backendNormalSuccessorPhase :: Phase
-
 
 
 
