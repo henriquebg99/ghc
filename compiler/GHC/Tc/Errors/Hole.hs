@@ -31,7 +31,7 @@ module GHC.Tc.Errors.Hole
 where
 
 import GHC.Prelude
-
+import Debug.Trace
 import GHC.Tc.Errors.Types ( HoleFitDispConfig(..), FitsMbSuppressed(..)
                            , ValidHoleFits(..), noValidHoleFits )
 import GHC.Tc.Types
@@ -577,7 +577,7 @@ findValidHoleFits tidy_env implics simples h@(Hole { hole_sort = ExprHole _
      ; traceTc "findingValidHoleFitsFor { " $ ppr hole
      ; traceTc "hole_lvl is:" $ ppr hole_lvl
      ; traceTc "simples are: " $ ppr simples
-     ; traceTc "locals are: " $ ppr lclBinds
+     ; trace (showSDocUnsafe (pprType hole_ty)) $ traceTc "locals are: " $ ppr lclBinds
      ; let (lcl, gbl) = partition gre_lcl (globalRdrEnvElts rdr_env)
            -- We remove binding shadowings here, but only for the local level.
            -- this is so we e.g. suggest the global fmap from the Functor class
