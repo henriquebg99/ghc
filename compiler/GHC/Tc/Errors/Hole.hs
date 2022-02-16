@@ -62,7 +62,7 @@ import GHC.Data.Maybe
 import GHC.Utils.FV ( fvVarList, fvVarSet, unionFV, mkFVs, FV )
 
 import Control.Arrow ( (&&&) )
-
+import System.Process
 import Control.Monad    ( filterM, replicateM, foldM )
 import Data.List        ( partition, sort, sortOn, nubBy )
 import Data.Graph       ( graphFromEdges, topSort )
@@ -547,7 +547,12 @@ getLocalBindings tidy_orig ct_loc
         discard_it = go env sofar tc_bndrs
         keep_it id = go env (id:sofar) tc_bndrs
 
-
+callTygar :: TcType -> IO String
+callTygar hole_ty = 
+  let typeStr = showSDocUnsafe (pprType hole_ty)
+      command = "stack exec hplus \" " ++ typeStr ++ "\" 2> /dev/null"
+      folder = "/home/henrique/Documents/meic/tese/tygar/hoogle_plus"
+    in readCreateProcess ((shell command) { cwd = Just folder }) ""
 
 -- See Note [Valid hole fits include ...]
 findValidHoleFits :: TidyEnv        -- ^ The tidy_env for zonking
@@ -556,7 +561,7 @@ findValidHoleFits :: TidyEnv        -- ^ The tidy_env for zonking
                   -- ^ The  unsolved simple constraints in the implication for
                   -- the hole.
                   -> Hole
-                  -> TcM (TidyEnv, ValidHoleFits)
+                  -> TcM (TidyEnv, ValidHoleFits) 
 findValidHoleFits tidy_env implics simples h@(Hole { hole_sort = ExprHole _
                                                    , hole_loc  = ct_loc
                                                    , hole_ty   = hole_ty }) =
@@ -577,7 +582,9 @@ findValidHoleFits tidy_env implics simples h@(Hole { hole_sort = ExprHole _
      ; traceTc "findingValidHoleFitsFor { " $ ppr hole
      ; traceTc "hole_lvl is:" $ ppr hole_lvl
      ; traceTc "simples are: " $ ppr simples
-     ; trace (showSDocUnsafe (pprType hole_ty)) $ traceTc "locals are: " $ ppr lclBinds
+     ; (callTygar hole_ty) >>= putStrLn 
+   --; trace (showSDocUnsafe (pprType hole_ty)) $ traceTc "locals are: " $ ppr lclBinds
+     ; let aux = ((callTygar hole_ty) >>= putStrLn) :: IO () in trace (show aux) $ traceTc "simples are: " $ ppr simples
      ; let (lcl, gbl) = partition gre_lcl (globalRdrEnvElts rdr_env)
            -- We remove binding shadowings here, but only for the local level.
            -- this is so we e.g. suggest the global fmap from the Functor class
